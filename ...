@@ -1,0 +1,246 @@
+---
+author: architect
+wave: 1
+depends_on: [12]
+files_modified:
+  - types.go
+  - fingerprint/scripts.go
+  - fingerprint/scripts/webgpu.tmpl.js
+  - fingerprint/scripts/timing.tmpl.js
+  - fingerprint/generate.go
+  - chrome.go
+  - session.go
+  - fingerprint/scripts_test.go
+  - fingerprint/testdata/manifest.json
+  - fingerprint/testdata/checksums.txt
+  - fingerprint/testdata/webgpu/default.js
+  - fingerprint/testdata/webgpu/nvidia.js
+  - fingerprint/testdata/timing/enabled.js
+  - fingerprint/testdata/timing/disabled.js
+  - fingerprint/testdata/all/with_webgpu_timing.js
+  - webgpu_timing_test.go
+autonomous: true
+---
+
+# Phase 13: WebGPU + Timing
+
+## Goal (Q)
+
+Add two forward-looking anti-detect surfaces for the v1.1 milestone:
+
+1. **WebGPU spoofing** — `navigator.gpu.requestAdapter` returns a mocked `GPUAdapter`
+   whose `info` object is coherent with the profile's GPU family — **ADD-04**.
+2. **Optional timing spoofing** — when enabled, `performance.now()` and `Date.now()` are
+   rounded to a configured precision; off by default — **ADD-05**.
+3. **Optional CDP CPU throttling** — a profile setting can request a CDP
+   `Emulation.setCPUThrottlingRate` value; off by default — **ADD-05**.
+
+All changes are additive, preserve the v1.0 default behavior for profiles that do not
+override the new fields, and are exercised by golden fixtures plus real-Chrome smoke
+tests.
+
+## Assume (P)
+
+- Phase 12 has landed and the working tree is green (`go build ./...`, `go test ./...`).
+- The existing script-builder pattern is reused: `//go:embed` + token-replaced templates
+  in `fingerprint/scripts/`, builder functions in `fingerprint/scripts.go`, and golden
+  fixtures guarded by `fingerprint/checksums_test.go` and `fingerprint/scripts_test.go`.
+- The WebGPU script is injected into the core launch bundle and the consumer helper
+  (`GetFingerprintScripts`) by default. The timing script is injected only when enabled.
+- CDP CPU throttling is applied inside `chrome.go` `applyAntiDetect` only when the
+  profile setting is positive; it is not applied in `PatchPage` or the M5 loop.
+
+## Files
+
+- **Required context**
+  - `.planning/phases/13-webgpu-timing/13-CONTEXT.md`
+  - `.planning/ROADMAP.md` Phase 13
+  - `.planning/REQUIREMENTS.md` ADD-04, ADD-05
+- **Existing code to reuse**
+  - `fingerprint/scripts.go` — builders, `AllProtectionOptions`, `GetAllProtectionScripts`, `GetFingerprintScripts`
+  - `fingerprint/scripts/*.js` — template/script pattern
+  - `fingerprint/generate.go` — `GeneratedFingerprint`, `GenerateFingerprint`, `webGLCapsByFamily`, GPU family tables
+  - `types.go` — `FingerprintConfig`, `WebGLConfig`, `TimingConfig` (new)
+  - `chrome.go` — `applyAntiDetect`, CDP `NetworkSetUserAgentOverride` / `EmulationSetTimezoneOverride` pattern
+  - `session.go` — `protectionBundle`, `installProtections`, `CreateSession`
+  - `navigator_coherence_test.go` / `integration_test.go` — real-Chrome test pattern
+  - `fingerprint/scripts_test.go` — builder golden-test pattern
+  - `fingerprint/testdata/manifest.json` and `fingerprint/testdata/checksums.txt`
+
+## Reference
+
+- Decisions D-01 through D-14 from `13-CONTEXT.md`.
+- Phase 12 `12-SUMMARY.md` — shows how `AllProtectionOptions`, `GetFingerprintScripts`, `chrome.go`, and `session.go` were extended.
+- Requirements ADD-04, ADD-05 in `REQUIREMENTS.md`.
+
+## Tasks
+
+### Workstream 1 — WebGPU Spoofing (ADD-04)
+
+#### Task 1.1: Define WebGPU types and builder
+
+<read_first>
+- `types.go` `FingerprintConfig` and `WebGLConfig` (lines ~120–180)
+- `fingerprint/scripts.go` `WebGLScriptConfig`, `CreateWebGLScript`, and the template
+  replacement style.
+- `fingerprint/generate.go` `WebGLInfo`, `webglRenderers`, and `platformConfigs` GPU
+  family derivation.
+</read_first>
+
+<action>
+1. In `types.go`, add to `FingerprintConfig`:
+   ```go
+   WebGPU  *WebGPUConfig  `json:"webgpu,omitempty"`
+   Timing  *TimingConfig  `json:"timing,omitempty"`
+   CPUThrottlingRate float64 `json:"cpuThrottlingRate,omitempty"`
+   ```
+   and define:
+   ```go
+   type WebGPUConfig struct {
+       Vendor       string `json:"vendor,omitempty"`
+       Architecture string `json:"architecture,omitempty"`
+       Device       string `json:"device,omitempty"`
+       Description  string `json:"description,omitempty"`
+   }
+   ```
+2. In `fingerprint/scripts.go`, add the builder-facing config type:
+   ```go
+   type WebGPUConfig struct {
+       Vendor       string `json:"vendor,omitempty"`
+       Architecture string `json:"architecture,omitempty"`
+       Device       string `json:"device,omitempty"`
+       Description  string `json:"description,omitempty"`
+   }
+   ```
+   Add:
+   ```go
+   func DefaultWebGPUConfig(gpuFamily string) WebGPUConfig
+   func CreateWebGPUScript(c WebGPUConfig) string
+   ```
+   `DefaultWebGPUConfig` maps a GPU family to a coherent `GPUAdapterInfo` shape:
+   - `intel` → vendor `"intel"`, architecture `"x86"`, device `"Intel(R) UHD Graphics 630"`,
+     description `"Intel UHD Graphics 630"`.
+   - `nvidia` → vendor `"nvidia"`, architecture `"x86"`, device `"NVIDIA GeForce RTX 3080"`,
+     description `"NVIDIA GeForce RTX 3080"`.
+   - `amd` → vendor `"amd"`, architecture `"x86"`, device `"AMD Radeon RX 580"`,
+     description `"AMD Radeon RX 580"`.
+   - `apple` → vendor `"apple"`, architecture `"apple"`, device `"Apple M3"`,
+     description `"Apple M3"`.
+   Unknown families fall back to the `intel` table. The exact strings are left to the
+   engineer as long as they are coherent with the GPU family used by WebGL.
+3. Create `fingerprint/scripts/webgpu.tmpl.js`. It must:
+   - Replace `%%WGPUJSON%%` with the JSON-encoded `WebGPUConfig`.
+   - Capture the real `navigator.gpu` in a closure if it exists.
+   - Define a mocked `GPUAdapter` object with `requestAdapterInfo()` and an `info`
+     property (both returning the same `GPUAdapterInfo`).
+   - Override `navigator.gpu.requestAdapter` to return `Promise.resolve(adapter)`
+     regardless of options.
+   - Preserve the existence of `navigator.gpu` and its non-`requestAdapter` members
+     (e.g., `getPreferredCanvasFormat`, `wgslLanguageFeatures) by delegating to the
+     real object where present.
+   - The script must be valid in browsers that do not expose `navigator.gpu` at all
+     (define the mock object only when absent).
+</action>
+
+<acceptance_criteria>
+- `go build ./...` passes.
+- `CreateWebGPUScript(DefaultWebGPUConfig("nvidia"))` contains `"nvidia"`, `"NVIDIA GeForce RTX 3080"`,
+  and a `requestAdapter` override that returns a Promise.
+- `GetAllProtectionScripts(&AllProtectionOptions{WebGPU: &cfg})` contains the WebGPU script.
+- `GetAllProtectionScripts(nil)` contains the WebGPU script (because the default is enabled).
+</acceptance_criteria>
+
+---
+
+#### Task 1.2: Wire WebGPU into the launch bundle and generator
+
+<read_first>
+- `fingerprint/scripts.go` `AllProtectionOptions`, `GetAllProtectionScripts`, `GetFingerprintScripts`
+- `fingerprint/generate.go` `GeneratedFingerprint` and `GenerateFingerprint`
+- `session.go` `CreateSession` mapping of generated fields to `FingerprintConfig`
+</read_first>
+
+<action>
+1. In `fingerprint/scripts.go`:
+   - Add `WebGPU *WebGPUConfig` to `AllProtectionOptions`.
+   - Append `CreateWebGPUScript(*o.WebGPU)` to `GetAllProtectionScripts` when `o.WebGPU != nil`,
+     placing it after the WebGL script and before the timing/script-automation scripts.
+   - When `o.WebGPU == nil`, append `CreateWebGPUScript(DefaultWebGPUConfig(""))` so the
+     default behavior is to inject a coherent but generic WebGPU spoof.
+2. In `fingerprint/generate.go`:
+   - Add `WebGPU WebGPUConfig` to `GeneratedFingerprint`.
+   - In `GenerateFingerprint`, derive the GPU family (`selGpu`) and set:
+     ```go
+     WebGPU: DefaultWebGPUConfig(selGpu),
+     ```
+     (reuse the same family selected for WebGL).
+3. In `fingerprint/scripts.go` `GetFingerprintScripts`, append the WebGPU script after
+   WebGL and before the automation bypass, using the generated `fp.WebGPU`.
+</action>
+
+<acceptance_criteria>
+- `fingerprint.GenerateFingerprint(fingerprint.GenerateFingerprintOptions{})` returns a
+  fingerprint with a non-empty `WebGPU` block whose vendor matches the GPU family.
+- `GetFingerprintScripts(GeneratedFingerprint{WebGPU: cfg})` contains the WebGPU script.
+- `GetAllProtectionScripts(nil)` contains the WebGPU script by default and preserves the
+  v1.0 script order for all existing surfaces.
+</acceptance_criteria>
+
+---
+
+### Workstream 2 — Timing Spoofing (ADD-05)
+
+#### Task 2.1: Define timing types and builder
+
+<read_first>
+- `types.go` `FingerprintConfig` and `WebGPUConfig` (from Task 1.1)
+- `fingerprint/scripts.go` `CreateNavigatorScript` for a simple token-replacement template.
+- `fingerprint/scripts_test.go` for the expected builder-test style.
+</read_first>
+
+<action>
+1. In `types.go`, define:
+   ```go
+   type TimingConfig struct {
+       Enabled   bool          `json:"enabled,omitempty"`
+       Precision time.Duration `json:"precision,omitempty"` // e.g. 1ms, 100µs
+   }
+   ```
+   and ensure `FingerprintConfig` embeds `Timing *TimingConfig` and `CPUThrottlingRate` as
+   added in Task 1.1.
+2. In `fingerprint/scripts.go`, add the builder-facing config type:
+   ```go
+   type TimingConfig struct {
+       Enabled   bool          `json:"enabled,omitempty"`
+       Precision time.Duration `json:"precision,omitempty"`
+   }
+   ```
+   Add:
+   ```go
+   func DefaultTimingConfig() TimingConfig
+   func CreateTimingScript(c TimingConfig) string
+   ```
+   `DefaultTimingConfig` returns `Enabled: false`. The default precision is `1ms` when
+   enabled but unspecified.
+3. Create `fingerprint/scripts/timing.tmpl.js`. It must:
+   - Read `%%TIMINGJSON%%` with `enabled` and `precisionMs` (precision converted to
+     milliseconds as a floating-point number, e.g., `0.1` for `100µs`).
+   - When `enabled` is false, do nothing (the script is still emitted but is a no-op).
+   - When `enabled` is true:
+     - Cache the real `performance.now()` base at script load time and the real `Date.now()`
+       base at script load time.
+     - Override `performance.now()` so each call returns the cached base rounded to the
+       nearest `precisionMs` plus a monotonic rounded increment from the real elapsed time
+       (use `Math.round((realNow - base) / precision) * precision + baseRounded`).
+     - Override `Date.now()` similarly: round the real elapsed delta to the configured
+       precision and add it to the rounded base `Date.now()`.
+     - Preserve `new Date()` behavior by overriding the `Date` constructor so that
+       `new Date()` (no arguments) and `Date.now()` both observe the rounded timeline.
+     - Keep `Date.prototype` and static methods (`parse`, `UTC`) delegating to the real
+       `Date` constructor.
+</action>
+
+<acceptance_criteria>
+- `go build ./...` passes.
+- `CreateTimingScript(TimingConfig{Enabled: true, Precision: 1 * time.Millisecond})`
+  contains `

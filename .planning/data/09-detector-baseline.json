@@ -20,6 +20,11 @@
   "thumbmarkjs": {
     "status": "passed",
     "note": "ThumbmarkJS observed distinct per-profile fingerprints",
-    "value": "5c54af3dd4044ab6ba871b390064df6f / bbb206c09c873493f2023947720c130f"
+    "value": "af57964f38819a8a28a300a6d9e31c2e / 01e0c9c1c7e2cf0f1ff9ff9f66fbf62a"
+  },
+  "webgpu_timing_coherence": {
+    "status": "passed",
+    "note": "WebGPU/WebGL coherence self-check passed",
+    "value": "vendor and renderer aligned"
   }
 }

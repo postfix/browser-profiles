@@ -329,6 +329,63 @@
 })();
 
 
+(function() {
+  const cfg = {"enabled":true,"precisionMs":1};
+
+  if (!cfg.enabled) {
+    console.log('[browser-profiles] Timing spoofing disabled');
+    return;
+  }
+
+  const precision = cfg.precisionMs || 1.0;
+
+  const realPerformanceNow = performance.now.bind(performance);
+  const realDateNow = Date.now.bind(Date);
+  const RealDate = Date;
+
+  const perfBase = realPerformanceNow();
+  const dateBase = realDateNow();
+  const roundPerfBase = Math.round(perfBase / precision) * precision;
+  const roundDateBase = Math.round(dateBase / precision) * precision;
+
+  function roundToPrecision(value) {
+    return Math.round(value / precision) * precision;
+  }
+
+  performance.now = function() {
+    return roundPerfBase + roundToPrecision(realPerformanceNow() - perfBase);
+  };
+
+  function spoofedDateNow() {
+    return roundDateBase + roundToPrecision(realDateNow() - dateBase);
+  }
+
+  Date.now = spoofedDateNow;
+
+  function SpoofedDate() {
+    if (arguments.length === 0) {
+      return new RealDate(spoofedDateNow());
+    }
+    return new RealDate(...arguments);
+  }
+
+  SpoofedDate.prototype = RealDate.prototype;
+  SpoofedDate.now = spoofedDateNow;
+  SpoofedDate.parse = RealDate.parse;
+  SpoofedDate.UTC = RealDate.UTC;
+
+  // Replace the global Date constructor without breaking prototype chains.
+  try {
+    const g = (function() { return this; })() || self || window || global;
+    g.Date = SpoofedDate;
+  } catch (e) {
+    // Best-effort fallback should not throw.
+  }
+
+  console.log('[browser-profiles] Timing spoofing enabled (precision ' + precision + 'ms)');
+})();
+
+
 
 (function() {
   const spoofedProps = {"language":"en-US","platform":"Win32","hardwareConcurrency":8,"deviceMemory":8};
@@ -400,43 +457,6 @@
   }
   
   console.log('[browser-profiles] Navigator spoofing enabled:', spoofedProps);
-})();
-
-
-
-(function() {
-  // Spoof NavigatorUAData for Client Hints API
-  const spoofedUserAgentData = {
-    brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
-    mobile: false,
-    platform: 'Windows',
-      getHighEntropyValues: function(hints) {
-        return Promise.resolve({
-          brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
-          mobile: false,
-          platform: 'Windows',
-          platformVersion: '10.0.0',
-          architecture: 'x86',
-          model: '',
-          uaFullVersion: '120.0.6099.71',
-          fullVersionList: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}]
-        });
-      },
-      toJSON: function() {
-        return {
-          brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
-          mobile: false,
-          platform: 'Windows'
-        };
-      }
-    };
-    
-    Object.defineProperty(navigator, 'userAgentData', {
-      get: () => spoofedUserAgentData,
-      configurable: true
-    });
-  
-  console.log('[browser-profiles] Client Hints spoofing enabled: Windows');
 })();
 
 

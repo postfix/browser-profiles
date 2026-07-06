@@ -146,7 +146,7 @@
       "name": "default",
       "fn": "getAllProtectionScripts",
       "input": {},
-      "len": 16119
+      "len": 17719
     },
     {
       "dir": "all",
@@ -160,7 +160,7 @@
           "deviceMemory": 8
         }
       },
-      "len": 18223
+      "len": 19823
     },
     {
       "dir": "all",
@@ -172,7 +172,7 @@
         "webgl": true,
         "audio": false
       },
-      "len": 12224
+      "len": 13824
     },
     {
       "dir": "all",
@@ -183,7 +183,7 @@
         "canvasMode": "real",
         "audioMode": "noise"
       },
-      "len": 11780
+      "len": 13380
     },
     {
       "dir": "all",
@@ -197,7 +197,7 @@
           "deviceMemory": 32
         }
       },
-      "len": 18226
+      "len": 19826
     },
     {
       "dir": "all",
@@ -218,7 +218,7 @@
           "fullVersion": "120.0.6099.71"
         }
       },
-      "len": 19549
+      "len": 21149
     },
     {
       "dir": "fpscripts",
@@ -273,7 +273,7 @@
           "fullVersion": "120.0.0.0"
         }
       },
-      "len": 25393
+      "len": 26993
     },
     {
       "dir": "webgl",
@@ -438,7 +438,7 @@
           "platformKey": "windows"
         }
       },
-      "len": 26220
+      "len": 27820
     },
     {
       "dir": "permissions",
@@ -549,7 +549,83 @@
           "platformKey": "windows"
         }
       },
-      "len": 26220
+      "len": 27820
+    },
+    {
+      "dir": "webgpu",
+      "name": "default",
+      "fn": "createWebGPUScript",
+      "input": {
+        "gpuFamily": ""
+      },
+      "len": 1598
+    },
+    {
+      "dir": "webgpu",
+      "name": "nvidia",
+      "fn": "createWebGPUScript",
+      "input": {
+        "gpuFamily": "nvidia"
+      },
+      "len": 1598
+    },
+    {
+      "dir": "timing",
+      "name": "enabled",
+      "fn": "createTimingScript",
+      "input": {
+        "enabled": true,
+        "precisionMs": 1.0
+      },
+      "len": 1571
+    },
+    {
+      "dir": "timing",
+      "name": "disabled",
+      "fn": "createTimingScript",
+      "input": {
+        "enabled": false
+      },
+      "len": 1572
+    },
+    {
+      "dir": "all",
+      "name": "with_webgpu_timing",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "en-US",
+          "platform": "Win32",
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8
+        },
+        "webRTCMode": "fake",
+        "canvasMode": "noise",
+        "audioMode": "noise",
+        "webGPU": {
+          "vendor": "intel",
+          "architecture": "x86",
+          "device": "Intel(R) UHD Graphics 630",
+          "description": "Intel UHD Graphics 630"
+        },
+        "timing": {
+          "enabled": true,
+          "precisionMs": 1.0
+        },
+        "permissions": {
+          "camera": "prompt",
+          "microphone": "prompt",
+          "geolocation": "prompt",
+          "notifications": "default"
+        },
+        "plugins": {
+          "platformKey": "windows"
+        },
+        "fonts": {
+          "platformKey": "windows"
+        }
+      },
+      "len": 28067
     }
   ]
 }

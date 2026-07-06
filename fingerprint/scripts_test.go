@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func readFixture(t *testing.T, rel string) string {
@@ -114,6 +115,8 @@ func TestBuildersGolden(t *testing.T) {
 		Screen:      ScreenInfo{Width: 1920, Height: 1080, AvailWidth: 1920, AvailHeight: 1040, ColorDepth: 24, PixelDepth: 24, DevicePixelRatio: 1},
 		WebGL:       WebGLInfo{Vendor: "Google Inc. (ANGLE)", Renderer: "ANGLE (Intel)"},
 		ClientHints: ClientHintsInfo{Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Mobile: false, Brands: []Brand{{Brand: "Chromium", Version: "120"}}, FullVersion: "120.0.0.0"},
+		WebGPU:      DefaultWebGPUConfig("intel"),
+		Timing:      DefaultTimingConfig(),
 	}
 	assertEq(t, "fpscripts/sample",
 		GetFingerprintScripts(fixedFp),
@@ -217,6 +220,32 @@ func TestBuildersGolden(t *testing.T) {
 			Fonts:       &FontsConfig{Whitelist: DefaultFontsConfig("windows").Whitelist},
 		}),
 		readFixture(t, "all/with_permissions_plugins_fonts.js"))
+
+	assertEq(t, "webgpu/default",
+		CreateWebGPUScript(DefaultWebGPUConfig("")),
+		readFixture(t, "webgpu/default.js"))
+	assertEq(t, "webgpu/nvidia",
+		CreateWebGPUScript(DefaultWebGPUConfig("nvidia")),
+		readFixture(t, "webgpu/nvidia.js"))
+	assertEq(t, "timing/enabled",
+		CreateTimingScript(TimingConfig{Enabled: true, Precision: 1 * time.Millisecond}),
+		readFixture(t, "timing/enabled.js"))
+	assertEq(t, "timing/disabled",
+		CreateTimingScript(TimingConfig{Enabled: false}),
+		readFixture(t, "timing/disabled.js"))
+	assertEq(t, "all/with_webgpu_timing",
+		GetAllProtectionScripts(&AllProtectionOptions{
+			Navigator:   &NavigatorConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8},
+			WebRTCMode:  "fake",
+			CanvasMode:  "noise",
+			AudioMode:   "noise",
+			WebGPU:      &WebGPUConfig{Vendor: "intel", Architecture: "x86", Device: "Intel(R) UHD Graphics 630", Description: "Intel UHD Graphics 630"},
+			Timing:      &TimingConfig{Enabled: true, Precision: 1 * time.Millisecond},
+			Permissions: &PermissionsConfig{Camera: "prompt", Microphone: "prompt", Geolocation: "prompt", Notifications: "default"},
+			Plugins:     &PluginsConfig{Plugins: DefaultPluginsConfig("windows").Plugins, MimeTypes: DefaultPluginsConfig("windows").MimeTypes},
+			Fonts:       &FontsConfig{Whitelist: DefaultFontsConfig("windows").Whitelist},
+		}),
+		readFixture(t, "all/with_webgpu_timing.js"))
 }
 
 func safeSlice(s string, lo, hi int) string {
@@ -388,7 +417,52 @@ func TestAllProtectionIncludesNewScripts(t *testing.T) {
 	}
 }
 
-// TestDefaultConfigsByPlatform verifies that the platform-specific plugin and font
+// TestAllProtectionIncludesWebGPUTiming verifies that WebGPU and Timing scripts are
+// emitted in the expected order relative to the other protections.
+func TestAllProtectionIncludesWebGPUTiming(t *testing.T) {
+	all := GetAllProtectionScripts(
+		&AllProtectionOptions{
+			Navigator:   &NavigatorConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8},
+			ClientHints: &ClientHintsScriptConfig{Platform: "Windows"},
+			WebGPU:      &WebGPUConfig{Vendor: "nvidia", Architecture: "x86", Device: "NVIDIA GeForce RTX 3080", Description: "NVIDIA GeForce RTX 3080"},
+			Timing:      &TimingConfig{Enabled: true, Precision: 1 * time.Millisecond},
+			Permissions: &PermissionsConfig{Camera: "denied"},
+			Plugins:     &PluginsConfig{Plugins: DefaultPluginsConfig("windows").Plugins, MimeTypes: DefaultPluginsConfig("windows").MimeTypes},
+			Fonts:       &FontsConfig{Whitelist: DefaultFontsConfig("windows").Whitelist},
+		})
+
+	idxWebRTC := strings.Index(all, "WebRTC protection enabled")
+	idxCanvas := strings.Index(all, "Canvas protection enabled")
+	idxWebGL := strings.Index(all, "WebGL protection enabled")
+	idxAudio := strings.Index(all, "Audio protection enabled")
+	idxWebGPU := strings.Index(all, "WebGPU protection enabled")
+	idxTiming := strings.Index(all, "Timing spoofing enabled")
+	idxNav := strings.Index(all, "Navigator spoofing enabled")
+	idxCH := strings.Index(all, "Client Hints spoofing enabled")
+	idxPerm := strings.Index(all, "Permissions spoofing enabled")
+	idxPlugins := strings.Index(all, "Plugins spoofing enabled")
+	idxFonts := strings.Index(all, "Fonts guard enabled")
+	idxBypass := strings.Index(all, "Automation bypass enabled")
+
+	for name, idx := range map[string]int{
+		"webrtc": idxWebRTC, "canvas": idxCanvas, "webgl": idxWebGL, "audio": idxAudio,
+		"webgpu": idxWebGPU, "timing": idxTiming, "navigator": idxNav, "client-hints": idxCH,
+		"permissions": idxPerm, "plugins": idxPlugins, "fonts": idxFonts, "automation-bypass": idxBypass,
+	} {
+		if idx < 0 {
+			t.Fatalf("missing %s marker", name)
+		}
+	}
+
+	if !(idxWebRTC < idxCanvas && idxCanvas < idxWebGL && idxWebGL < idxAudio &&
+		idxAudio < idxWebGPU && idxWebGPU < idxTiming &&
+		idxTiming < idxNav && idxNav < idxCH && idxCH < idxPerm &&
+		idxPerm < idxPlugins && idxPlugins < idxFonts && idxFonts < idxBypass) {
+		t.Errorf("unexpected script order: webrtc=%d canvas=%d webgl=%d audio=%d webgpu=%d timing=%d nav=%d ch=%d perm=%d plugins=%d fonts=%d bypass=%d",
+			idxWebRTC, idxCanvas, idxWebGL, idxAudio, idxWebGPU, idxTiming, idxNav, idxCH, idxPerm, idxPlugins, idxFonts, idxBypass)
+	}
+}
+
 // defaults differ in the expected ways.
 func TestDefaultConfigsByPlatform(t *testing.T) {
 	if len(DefaultPluginsConfig("windows").Plugins) <= len(DefaultPluginsConfig("macos").Plugins) {
@@ -405,5 +479,56 @@ func TestDefaultConfigsByPlatform(t *testing.T) {
 	}
 	if DefaultPermissionsConfig("windows").Camera != "prompt" {
 		t.Errorf("unexpected default camera permission: %s", DefaultPermissionsConfig("windows").Camera)
+	}
+}
+
+// TestWebGPUBuilder verifies that the WebGPU builder emits the configured adapter
+// info fields and preserves the requestAdapter promise shape.
+func TestWebGPUBuilder(t *testing.T) {
+	cfg := DefaultWebGPUConfig("nvidia")
+	script := CreateWebGPUScript(cfg)
+	for _, want := range []string{"\"vendor\":\"nvidia\"", "\"architecture\":\"x86\"", "NVIDIA GeForce RTX 3080", "requestAdapter", "requestAdapterInfo"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("webgpu script missing %q", want)
+		}
+	}
+	if !strings.Contains(script, "Promise.resolve") {
+		t.Errorf("webgpu requestAdapter should return a Promise")
+	}
+
+	intel := DefaultWebGPUConfig("")
+	if intel.Vendor != "intel" || intel.Device != "Intel(R) UHD Graphics 630" {
+		t.Errorf("empty GPU family should fall back to intel defaults, got %+v", intel)
+	}
+	apple := DefaultWebGPUConfig("apple")
+	if apple.Vendor != "apple" || apple.Architecture != "apple" {
+		t.Errorf("apple GPU family mismatch, got %+v", apple)
+	}
+}
+
+// TestTimingBuilder verifies that the enabled timing script contains the expected
+// overrides and that the disabled script short-circuits before applying them.
+func TestTimingBuilder(t *testing.T) {
+	enabled := CreateTimingScript(TimingConfig{Enabled: true, Precision: 100 * time.Microsecond})
+	for _, want := range []string{"performance.now =", "Date.now =", "SpoofedDate", `"precisionMs":0.1`} {
+		if !strings.Contains(enabled, want) {
+			t.Errorf("enabled timing script missing %q", want)
+		}
+	}
+	if !strings.Contains(enabled, "Timing spoofing enabled") {
+		t.Errorf("enabled timing script should log that it is enabled")
+	}
+
+	disabled := CreateTimingScript(TimingConfig{Enabled: false})
+	if !strings.Contains(disabled, "Timing spoofing disabled") {
+		t.Errorf("disabled timing script should log that it is disabled")
+	}
+	if !strings.Contains(disabled, "if (!cfg.enabled)") {
+		t.Errorf("disabled timing script should contain an early return guard")
+	}
+
+	oneMs := CreateTimingScript(TimingConfig{Enabled: true, Precision: 1 * time.Millisecond})
+	if !strings.Contains(oneMs, `"precisionMs":1`) {
+		t.Errorf("1ms precision should serialize as 1.0, got %q", oneMs)
 	}
 }
