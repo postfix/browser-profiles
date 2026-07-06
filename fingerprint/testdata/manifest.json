@@ -1,0 +1,183 @@
+{
+  "consts": [
+    "consts/webrtc.js",
+    "consts/canvas.js",
+    "consts/webgl.js",
+    "consts/audio.js",
+    "consts/automation_bypass.js"
+  ],
+  "cases": [
+    {
+      "dir": "navigator",
+      "name": "launch",
+      "fn": "createNavigatorScript",
+      "input": {
+        "language": "en-US",
+        "platform": "Win32",
+        "hardwareConcurrency": 8,
+        "deviceMemory": 8
+      },
+      "len": 1342
+    },
+    {
+      "dir": "navigator",
+      "name": "full_escape",
+      "fn": "createNavigatorScript",
+      "input": {
+        "userAgent": "Mozilla/5.0 <b>&\"x\"</b>",
+        "language": "ja-JP",
+        "platform": "MacIntel",
+        "hardwareConcurrency": 12,
+        "deviceMemory": 16,
+        "vendor": "Google Inc."
+      },
+      "len": 1410
+    },
+    {
+      "dir": "navigator",
+      "name": "empty",
+      "fn": "createNavigatorScript",
+      "input": {},
+      "len": 1264
+    },
+    {
+      "dir": "screen",
+      "name": "default",
+      "fn": "createScreenScript",
+      "input": {},
+      "len": 950
+    },
+    {
+      "dir": "screen",
+      "name": "custom",
+      "fn": "createScreenScript",
+      "input": {
+        "width": 2560,
+        "height": 1440,
+        "deviceScaleFactor": 2
+      },
+      "len": 950
+    },
+    {
+      "dir": "clienthints",
+      "name": "default",
+      "fn": "createClientHintsScript",
+      "input": {},
+      "len": 1369
+    },
+    {
+      "dir": "clienthints",
+      "name": "full",
+      "fn": "createClientHintsScript",
+      "input": {
+        "platform": "macOS",
+        "platformVersion": "14.2.0",
+        "architecture": "arm",
+        "model": "",
+        "mobile": false,
+        "brands": [
+          {
+            "brand": "Chromium",
+            "version": "120"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "120"
+          }
+        ]
+      },
+      "len": 1209
+    },
+    {
+      "dir": "all",
+      "name": "default",
+      "fn": "getAllProtectionScripts",
+      "input": {},
+      "len": 17533
+    },
+    {
+      "dir": "all",
+      "name": "launch_nav",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "en-US",
+          "platform": "Win32",
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8
+        }
+      },
+      "len": 18877
+    },
+    {
+      "dir": "all",
+      "name": "toggles",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "webrtc": true,
+        "canvas": false,
+        "webgl": true,
+        "audio": false
+      },
+      "len": 13638
+    },
+    {
+      "dir": "all",
+      "name": "nav_escape",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "ja-JP",
+          "platform": "Mac<>&",
+          "hardwareConcurrency": 16,
+          "deviceMemory": 32
+        }
+      },
+      "len": 18880
+    },
+    {
+      "dir": "fpscripts",
+      "name": "sample",
+      "fn": "getFingerprintScripts",
+      "input": {
+        "userAgent": "Mozilla/5.0 X",
+        "platform": "Win32",
+        "language": "en-US",
+        "languages": [
+          "en-US",
+          "en"
+        ],
+        "hardwareConcurrency": 8,
+        "deviceMemory": 8,
+        "vendor": "Google Inc. (ANGLE)",
+        "screen": {
+          "width": 1920,
+          "height": 1080,
+          "availWidth": 1920,
+          "availHeight": 1040,
+          "colorDepth": 24,
+          "pixelDepth": 24,
+          "devicePixelRatio": 1
+        },
+        "webgl": {
+          "vendor": "Google Inc. (ANGLE)",
+          "renderer": "ANGLE (Intel)"
+        },
+        "clientHints": {
+          "platform": "Windows",
+          "platformVersion": "10.0.0",
+          "architecture": "x86",
+          "model": "",
+          "mobile": false,
+          "brands": [
+            {
+              "brand": "Chromium",
+              "version": "120"
+            }
+          ]
+        }
+      },
+      "len": 20911
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "id": "a1b2c3d4e5f60718",
+  "name": "Google Account",
+  "proxy": {
+    "type": "http",
+    "host": "proxy.example.com",
+    "port": 8080,
+    "username": "proxyuser",
+    "password": "s3cret"
+  },
+  "timezone": "America/New_York",
+  "cookies": [
+    {
+      "name": "SID",
+      "value": "abc123",
+      "domain": ".google.com",
+      "path": "/",
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax",
+      "expires": 1893456000
+    }
+  ],
+  "fingerprint": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "language": "en-US",
+    "platform": "Win32",
+    "hardwareConcurrency": 8,
+    "deviceMemory": 8,
+    "screen": {
+      "width": 1920,
+      "height": 1080,
+      "deviceScaleFactor": 1
+    },
+    "webgl": {
+      "vendor": "Google Inc. (NVIDIA)",
+      "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    },
+    "webrtc": "disable",
+    "canvas": "noise",
+    "audio": "noise"
+  },
+  "startUrls": [
+    "https://accounts.google.com",
+    "https://mail.google.com"
+  ],
+  "tags": [
+    "work",
+    "google"
+  ],
+  "createdAt": 1710000000000,
+  "updatedAt": 1710000500000
+}

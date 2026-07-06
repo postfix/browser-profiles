@@ -1,0 +1,54 @@
+mode: text
+cdpEndpoint: ""
+browserBinPath: ""
+headless: false
+browserTempDir: ./rod/browser
+noSandbox: false
+proxy: ""
+stealth:
+    proxy: ""
+    profilePath: ""
+    userAgent: ""
+    locale: ""
+    timezone: ""
+    platform: ""
+    acceptLanguage: ""
+    languages: []
+    hardwareConcurrency: 0
+    deviceMemory: 0
+    vendor: ""
+    spoofClientHints: false
+    webRTCLeakProtection: true
+    canvasNoise: true
+    fontSpoof: true
+    cdpProxy: null
+    cdpJitterMs: null
+    noCdpProxy: null
+    mediaDevicesSpoof: true
+    batterySpoof: true
+    codecSpoof: true
+    consoleCapture: null
+    requestCapture: null
+    typingSpeedMin: null
+    typingSpeedMax: null
+    typoRate: null
+    mouseTremor: null
+    mouseSteps: null
+    mouseSpeedMin: null
+    mouseSpeedMax: null
+    mouseDeviation: null
+    scrollDuration: null
+    scrollPhysics: null
+    screen:
+        width: 0
+        height: 0
+        deviceScaleFactor: 0
+loggerConfig:
+    loggerLevel: info
+    loggerFileName: ./log/server.log
+    LoggerFileMaxSize: 50
+    LoggerFileMaxBackups: 5
+    LoggerFileMaxAge: 30
+    loggerPrefix: "RodCLI \U0001F985"
+raw: false
+json: false

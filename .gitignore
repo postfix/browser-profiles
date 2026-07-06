@@ -1,25 +1,16 @@
-# Dependencies
-node_modules/
+# Go build artifacts
+/browser-profiles
+*.exe
+*.test
+*.out
+coverage.*
 
-# Build output
-dist/
-
-# Test files
-.test-profiles/
-.browser-profiles/
-
-# IDE
+# Editor / OS
 .vscode/
 .idea/
-
-# Logs
-*.log
-npm-debug.log*
-
-# OS
 .DS_Store
 Thumbs.db
+*.log
 
-# Package
-*.tgz
-docs/
+# Anvil planning layer (local-only)
+.planning/

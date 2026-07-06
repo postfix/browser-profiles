@@ -1,186 +1,96 @@
-# @aitofy/browser-profiles
+# browser-profiles (Go)
 
-> Self-hosted anti-detect browser profiles. The open-source alternative to AdsPower & Multilogin.
+> Self-hosted anti-detect browser profiles for Go. Open-source AdsPower / Multilogin alternative,
+> driven by go-rod. A faithful port of @aitofy/browser-profiles from TypeScript to Go.
 
 ## What is this?
 
-Like n8n for automation or Affine for notes, this is AdsPower for developers — self-hosted, open-source, and privacy-first. A TypeScript/JavaScript library for managing anti-detect browser profiles.
+A Go library + CLI for managing anti-detect browser profiles, driven by go-rod
+(github.com/go-rod/rod) instead of Puppeteer/Playwright. Profiles are stored locally
+(~/.aitofy/browser-profiles), fingerprints (WebRTC/Canvas/WebGL/Audio/automation-bypass) are
+injected via CDP, and authenticated HTTP/HTTPS/SOCKS5 proxies are supported via a local
+credential-injecting forward proxy.
 
-## Why Self-Hosted?
+## Install
 
-- Data stays on your machine (no cloud dependency)
-- Zero telemetry, zero tracking
-- Free forever (no subscriptions)
-- Full control over your profiles
-
-## Key Features
-
-- Self-hosted profile storage (data stays local)
-- 95% anti-detect score (WebRTC, Canvas, Audio protection)
-- Auto timezone detection from proxy IP
-- Proxy support with authentication (HTTP, HTTPS, SOCKS5)
-- Puppeteer and Playwright integration
-- Zero config, works out of the box
-- **NEW: Simplified imports** - all functions from one entry point
-
-## Installation
-
-```bash
-# Recommended: rebrowser-puppeteer-core (better anti-detect!)
-npm install @aitofy/browser-profiles rebrowser-puppeteer-core
-
-# Or standard puppeteer
-npm install @aitofy/browser-profiles puppeteer-core
+```
+go get github.com/postfix/browser-profiles
+go install github.com/postfix/browser-profiles/cmd/browser-profiles@latest
 ```
 
-## Anti-Detect Status
+Requires Go 1.26+ and a local Chrome/Chromium (auto-detected or CHROME_PATH).
 
-- browserleaks.com: 100% passed
-- pixelscan.net: 100% passed
-- browserscan.net: 95% (Bot Control -5%, Puppeteer limitation)
-- creepjs: 85% passed
+## Key features
 
-Note: 95% is the best achievable with Puppeteer/Playwright. 100% requires modified Chromium.
+- Self-hosted profile storage, format-compatible with the reference implementation.
+- Byte-faithful anti-detect protection scripts (golden-string verified).
+- Authenticated proxy support (HTTP/HTTPS/SOCKS5) via a local forward proxy.
+- Auto timezone detection from proxy IP (ip-api.com) + CDP override.
+- go-rod native: returns *rod.Browser + *rod.Page; protections reach every tab (M5 browser-level injection).
+- CLI: list/create/open/launch/info/delete/path.
 
-## CLI Tool
+## Quick examples
 
-Install globally: npm install -g @aitofy/browser-profiles
+### Temporary session (random fingerprint)
 
-Commands:
-- browser-profiles list - List all profiles
-- browser-profiles create <name> - Create new profile
-- browser-profiles open <id> - Open browser with profile
-- browser-profiles launch - Quick launch with random fingerprint
-- browser-profiles info <id> - Show profile details
-- browser-profiles delete <id> - Delete profile
-- browser-profiles path - Show storage path
+```go
+import bp "github.com/postfix/browser-profiles"
 
-## Quick Examples
-
-### Quick launch (simplest)
-
-```typescript
-import { quickLaunch } from '@aitofy/browser-profiles';
-
-const { page, close } = await quickLaunch({
-  proxy: { type: 'http', host: 'proxy.example.com', port: 8080 },
-});
-
-await page.goto('https://whoer.net');
-await close();
+sess, _ := bp.CreateSession(bp.CreateSessionOptions{
+    Proxy: &bp.ProxyConfig{Type: "http", Host: "proxy.com", Port: 8080},
+})
+defer sess.Terminate()
+sess.Page.MustNavigate("https://example.com")
 ```
 
-### Temporary session with random fingerprint
+### Profile management + launch
 
-```typescript
-import { createSession } from '@aitofy/browser-profiles';
-
-const session = await createSession({
-  randomFingerprint: true,
-  proxy: { type: 'http', host: 'proxy.com', port: 8080 },
-});
-
-await session.page.goto('https://example.com');
-await session.close();
+```go
+profiles := bp.NewBrowserProfiles(bp.BrowserProfilesOptions{})
+p, _ := profiles.Create(bp.ProfileConfig{
+    Name:  "My Account",
+    Proxy: &bp.ProxyConfig{Type: "http", Host: "proxy.com", Port: 8080, Username: "u", Password: "p"},
+})
+sess, _ := bp.WithProfile(profiles, p.ID, bp.LaunchOptions{})
+defer sess.Close()
+sess.Page.MustNavigate("https://whoer.net")
 ```
 
-### Apply patches to existing page
+### Generate a fingerprint
 
-```typescript
-import { patchPage } from '@aitofy/browser-profiles';
-
-await patchPage(existingPage, {
-  webdriver: true,
-  plugins: true,
-  webrtc: true,
-  fingerprint: { platform: 'Win32' },
-});
+```go
+import "github.com/postfix/browser-profiles/fingerprint"
+fp := fingerprint.GenerateFingerprint(fingerprint.GenerateFingerprintOptions{Platform: "macos", Gpu: "apple"})
+scripts := fingerprint.GetFingerprintScripts(fp)
 ```
 
-### Generate fingerprints
+## API summary
 
-```typescript
-import { generateFingerprint, getFingerprintScripts } from '@aitofy/browser-profiles';
+- BrowserProfiles: Create, Get, GetByName, GetByIdOrName, List, Update, Delete, groups, Duplicate,
+  Export/Import, Launch/LaunchByName/LaunchByIdOrName, Close/CloseAll/GetRunning.
+- WithProfile, QuickLaunch, CreateSession -> *Session{Browser, Page, Close, Terminate}.
+- LaunchChrome, LaunchChromeStandalone, GetChromePath, PatchPage.
+- fingerprint: GenerateFingerprint, GetAllProtectionScripts, GetFingerprintScripts.
 
-const fp = generateFingerprint({
-  platform: 'macos',
-  gpu: 'apple',
-  language: 'ja-JP',
-});
+## CLI commands
 
-const scripts = getFingerprintScripts(fp);
-await page.evaluateOnNewDocument(scripts);
-```
+- browser-profiles list [--json]
+- browser-profiles create <name> [--id --proxy --timezone --language --platform]
+- browser-profiles open <idOrName> [--headless]
+- browser-profiles launch [--proxy --headless --random]
+- browser-profiles info <idOrName> [--json]
+- browser-profiles delete <idOrName>
+- browser-profiles path
+- browser-profiles --version
 
-### Profile management
+## Use cases
 
-```typescript
-import { BrowserProfiles, withPuppeteer } from '@aitofy/browser-profiles';
-
-const profiles = new BrowserProfiles();
-
-const profile = await profiles.create({
-  name: 'My Account',
-  proxy: { type: 'http', host: 'proxy.example.com', port: 8080 },
-});
-
-const { page, close } = await withPuppeteer({ profile: profile.id });
-await page.goto('https://example.com');
-await close();
-```
-
-## API Summary
-
-### Main Functions (import from '@aitofy/browser-profiles')
-
-- `quickLaunch({ proxy, timezone })` - Quick launch without saved profile
-- `createSession({ randomFingerprint })` - Temporary session with random fingerprint
-- `patchPage(page, options)` - Apply anti-detect patches to existing page
-- `generateFingerprint(options)` - Generate browser fingerprint on-demand
-- `getFingerprintScripts(fingerprint)` - Get injection scripts for fingerprint
-- `withPuppeteer({ profile })` - Launch profile and connect Puppeteer
-- `launchChromeStandalone(options)` - Launch Chrome without profile management
-
-### BrowserProfiles class
-
-- `create(config)` - Create new profile
-- `launch(id)` - Launch browser for profile
-- `list()` - List all profiles
-- `get(id)` - Get profile by ID
-- `update(id, updates)` - Update profile
-- `delete(id)` - Delete profile
-
-### Playwright integration
-
-- `withPlaywright({ profile })` - Launch profile and connect Playwright
-
-### ExTower client
-
-- `createProfile(options)` - Create ExTower profile
-- `launchBrowser(userId)` - Launch and get WebSocket URL
-- `listProfiles()` - List all profiles
-- `deleteProfile(userId)` - Delete profile
-
-## Use Cases
-
-1. **Multi-account management** - Run multiple social media or e-commerce accounts
-2. **Web scraping** - Avoid IP bans with rotating proxies and fingerprints
-3. **Testing** - Test websites with different browser configurations
-4. **Automation** - Automate tasks across multiple isolated browser sessions
-
-## Related Searches
-
-- antidetect browser npm
-- puppeteer multi profile
-- extower api nodejs
-- multilogin alternative free
-- browser fingerprint protection
-- puppeteer proxy authentication
-- playwright antidetect
-- scraping fingerprint evasion
+1. Multi-account management (isolated profiles).
+2. Web scraping with rotating proxies + fingerprints.
+3. Testing across browser configurations.
+4. Automation across isolated browser sessions.
 
 ## Links
 
-- npm: https://www.npmjs.com/package/@aitofy/browser-profiles
-- GitHub: https://github.com/aitofy-dev/browser-profiles
-- Documentation: https://aitofy.dev/browser-profiles
+- GitHub: https://github.com/postfix/browser-profiles
+- go-rod: https://github.com/go-rod/rod

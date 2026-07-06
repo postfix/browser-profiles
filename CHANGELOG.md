@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0-go] - 2026-07-06
+
+### Changed
+
+- **Ported to Go, driven by go-rod.** Full reimplementation of the library and CLI in Go
+  (`github.com/postfix/browser-profiles`) on [go-rod](https://github.com/go-rod/rod), replacing the
+  TypeScript / Puppeteer / Playwright implementation. The on-disk profile format is preserved
+  (`~/.aitofy/browser-profiles`), and the injected anti-detect scripts are byte-identical to the
+  reference (golden-string verified).
+
+### Added
+
+- Authenticated **SOCKS5** proxy support (the TypeScript launcher rejected SOCKS5) via a local
+  credential-injecting forward proxy.
+- Browser-level protection injection so anti-detect scripts reach every tab, not only the launch target.
+
+### Removed
+
+- TypeScript sources, the npm package, and the separate Puppeteer / Playwright / ExTower
+  integrations — the Puppeteer and Playwright integrations collapse into the single built-in
+  go-rod driver.
+
 ## [0.2.12] - 2026-01-14
 
 ### Added
