@@ -14,7 +14,7 @@ keep integration tests hermetic, and establish a skip-safe detector-oracle basel
 ## Coverage (HARD-02)
 
 - **Baseline:** 77.6% statements
-- **Final:** 85.1% statements (`go test . -cover`)
+- **Final:** 85.2% statements (`go test . -cover`)
 - Target ≥ 85% met.
 
 ### Highest-impact coverage additions
@@ -85,31 +85,37 @@ Confirmed existing and added tests cover:
 
 File: `.planning/data/09-detector-baseline.json`
 
+Committed baseline (default run, no network oracles):
+
 | Detector | Status | Value / Note |
 |---|---|---|
-| ThumbmarkJS | passed | `ee576765960905473b035fe7e1389493 / 5e7dca1cdd50a19c5b16414017118520` |
-| CreepJS | passed | `unstable` (trust-score element not present on page; fallback recorded) |
-| BrowserLeaks | passed | `AEDC0EE5ABD8A25C06629F31DB38A650` (Canvas hash) |
+| ThumbmarkJS | passed | `813da738c099bdcbe719bc4ffb1a3798 / 20e55637979a6a99d8101f49ebb94218` |
+| CreepJS | skipped | `BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1` |
+| BrowserLeaks | skipped | `BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1` |
 
-*Recorded with `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` on 2026-07-06.*
+When run with `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` on 2026-07-06, the network oracles
+produced:
 
-When Chrome or network is unavailable, or when `BROWSER_PROFILES_RUN_NETWORK_ORACLES`
-is not set to `1`, each oracle test skips cleanly and records `status: skipped` with the
-reason. The harness does not fail the build.
+- CreepJS: `unstable` (trust-score element not reliably extractable on the public demo
+  page under headless automation; fallback recorded)
+- BrowserLeaks Canvas: `AEDC0EE5ABD8A25C06629F31DB38A650`
+
+The oracle tests skip cleanly when Chrome or network is unavailable, or when the network
+oracle env var is not set to `1`. They do not fail the build.
 
 ## Verification
 
 - `go build ./...` passes.
 - `go vet ./...` passes.
 - `go test ./... -count=1` passes.
-- `go test . -cover` reports 85.1% coverage.
+- `go test . -cover` reports 85.2% coverage.
 
 ## Gaps
 
-1. The CreepJS oracle currently records `unstable` because the score DOM selector is not
-   reliably extracted on the public CreepJS demo page under headless automation. The
-   harness is in place and will record a stable score if the selector/page structure
-   becomes extractable.
+1. The CreepJS oracle currently records `unstable` when run with network oracles because
+   the score DOM selector is not reliably extracted on the public CreepJS demo page under
+   headless automation. The harness is in place and will record a stable score if the
+   selector/page structure becomes extractable.
 2. Real-Chrome launch paths are exercised only when Chrome is installed; CI without
    Chrome will see them as skipped. This is by design and documented in the coverage gap
    list above.
