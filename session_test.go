@@ -1,11 +1,13 @@
 package browserprofiles
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/postfix/browser-profiles/fingerprint"
 )
 
 // TestWithProfileSmokeAndM5 is a headless smoke test for WithProfile: it launches
@@ -107,4 +109,50 @@ func evalStr(t *testing.T, p *rod.Page, js string) string {
 		t.Fatalf("eval %q: %v", js, err)
 	}
 	return obj.Value.Str()
+}
+
+// TestPatchPageScriptModes verifies that patchPageScript dispatches to the
+// mode-aware WebRTC builder and falls back to the v1.0 "fake" default. This is
+// a Chrome-free test: it only inspects the generated script string.
+func TestPatchPageScriptModes(t *testing.T) {
+	base := patchPageScript(PatchPageOptions{})
+	if !strings.Contains(base, fingerprint.WebRTCProtectionScript) {
+		t.Errorf("default PatchPage should inject the fake WebRTC protection script")
+	}
+	if !strings.Contains(base, "Navigator spoofing enabled") {
+		t.Errorf("default PatchPage should always inject the navigator override")
+	}
+
+	disable := patchPageScript(PatchPageOptions{Fingerprint: &FingerprintConfig{WebRTC: "disable"}})
+	if strings.Contains(disable, fingerprint.WebRTCProtectionScript) {
+		t.Errorf("webrtc=disable should not inject the fake WebRTC script")
+	}
+	if !strings.Contains(disable, fingerprint.WebRTCProtectionDisableScript) {
+		t.Errorf("webrtc=disable should inject the disable script")
+	}
+	if !strings.Contains(disable, "Navigator spoofing enabled") {
+		t.Errorf("webrtc=disable should still inject the navigator override")
+	}
+
+	real := patchPageScript(PatchPageOptions{Fingerprint: &FingerprintConfig{WebRTC: "real"}})
+	if strings.Contains(real, fingerprint.WebRTCProtectionScript) {
+		t.Errorf("webrtc=real should not inject the fake WebRTC script")
+	}
+	if strings.Contains(real, fingerprint.WebRTCProtectionDisableScript) {
+		t.Errorf("webrtc=real should not inject the disable script")
+	}
+	if !strings.Contains(real, "Navigator spoofing enabled") {
+		t.Errorf("webrtc=real should still inject the navigator override")
+	}
+
+	empty := patchPageScript(PatchPageOptions{Fingerprint: &FingerprintConfig{WebRTC: ""}})
+	if !strings.Contains(empty, fingerprint.WebRTCProtectionScript) {
+		t.Errorf("empty webrtc mode should fall back to the fake WebRTC protection script")
+	}
+
+	// WebRTC toggle off should override mode and emit nothing.
+	off := patchPageScript(PatchPageOptions{WebRTC: new(bool), Fingerprint: &FingerprintConfig{WebRTC: "disable"}})
+	if strings.Contains(off, "WebRTC") {
+		t.Errorf("WebRTC toggle=false should prevent any WebRTC script from being emitted")
+	}
 }

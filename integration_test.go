@@ -521,3 +521,88 @@ func TestCrossContextInjection(t *testing.T) {
 		t.Fatalf("iframe hardwareConcurrency = %d, want 12", hw)
 	}
 }
+
+// TestAntiDetectModesSmoke verifies that the WebRTC / Canvas / Audio mode fields
+// actually change runtime behavior in a real headless Chrome. It uses two profiles
+// (non-default and default modes) and checks the observable API shape on each page.
+// Skips gracefully when Chrome is unavailable.
+func TestAntiDetectModesSmoke(t *testing.T) {
+	requireChrome(t)
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{StoragePath: t.TempDir()})
+
+	// Non-default combination: WebRTC disabled, canvas real, audio noised.
+	nonDefault, err := bp.Create(ProfileConfig{
+		ID:   "modes-nondflt-01",
+		Name: "modes-nondflt",
+		Fingerprint: &FingerprintConfig{
+			Platform:            "Win32",
+			Language:            "en-US",
+			HardwareConcurrency: 8,
+			DeviceMemory:        8,
+			WebRTC:              "disable",
+			Canvas:              "real",
+			Audio:               "noise",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create non-default profile: %v", err)
+	}
+
+	sess, err := WithProfile(bp, nonDefault.ID, LaunchOptions{Headless: true})
+	if err != nil {
+		t.Fatalf("WithProfile non-default: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Terminate() })
+
+	page := sess.Page
+	navigate(t, page)
+
+	if got := evalStr(t, page, "() => typeof window.RTCPeerConnection"); got != "undefined" {
+		t.Fatalf("WebRTC disable: typeof RTCPeerConnection = %q, want undefined", got)
+	}
+	if got := evalStr(t, page, "() => HTMLCanvasElement.prototype.toDataURL.toString()"); !strings.Contains(got, "[native code]") {
+		t.Fatalf("Canvas real: toDataURL toString = %q, want native code", got)
+	}
+	if got := evalStr(t, page, "() => CanvasRenderingContext2D.prototype.getImageData.toString()"); !strings.Contains(got, "[native code]") {
+		t.Fatalf("Canvas real: getImageData toString = %q, want native code", got)
+	}
+	if got := evalStr(t, page, "() => AudioBuffer.prototype.getChannelData.toString()"); strings.Contains(got, "[native code]") {
+		t.Fatalf("Audio noise: getChannelData toString = %q, want wrapped (non-native)", got)
+	}
+
+	// Default combination: v1.0 behavior (fake WebRTC, noisy canvas, noisy audio).
+	defaultProf, err := bp.Create(ProfileConfig{
+		ID:   "modes-default-01",
+		Name: "modes-default",
+		Fingerprint: &FingerprintConfig{
+			Platform:            "Win32",
+			Language:            "en-US",
+			HardwareConcurrency: 8,
+			DeviceMemory:        8,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create default profile: %v", err)
+	}
+
+	sess2, err := WithProfile(bp, defaultProf.ID, LaunchOptions{Headless: true})
+	if err != nil {
+		t.Fatalf("WithProfile default: %v", err)
+	}
+	t.Cleanup(func() { _ = sess2.Terminate() })
+
+	page2 := sess2.Page
+	navigate(t, page2)
+
+	if got := evalStr(t, page2, "() => typeof window.RTCPeerConnection"); got == "undefined" {
+		t.Fatalf("WebRTC fake: RTCPeerConnection should be defined")
+	}
+	if got := evalStr(t, page2, "() => HTMLCanvasElement.prototype.toDataURL.toString()"); strings.Contains(got, "[native code]") {
+		t.Fatalf("Canvas noise: toDataURL should be wrapped (non-native)")
+	}
+	if got := evalStr(t, page2, "() => AudioBuffer.prototype.getChannelData.toString()"); strings.Contains(got, "[native code]") {
+		t.Fatalf("Audio noise: getChannelData should be wrapped (non-native)")
+	}
+}

@@ -3,6 +3,7 @@ package fingerprint
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,10 +19,14 @@ func readFixture(t *testing.T, rel string) string {
 // TestConstsMatchReference guards the embedded protection scripts against drift.
 func TestConstsMatchReference(t *testing.T) {
 	cases := map[string]string{
-		"consts/webrtc.js":            WebRTCProtectionScript,
-		"consts/canvas.js":            CanvasProtectionScript,
+		"consts/webrtc-disable.js":    WebRTCProtectionDisableScript,
+		"consts/webrtc-fake.js":       WebRTCProtectionScript,
+		"consts/webrtc-real.js":       WebRTCProtectionRealScript,
+		"consts/canvas-noise.js":      CanvasProtectionScript,
+		"consts/canvas-real.js":       CanvasProtectionRealScript,
 		"consts/webgl.js":             WebGLProtectionScript,
-		"consts/audio.js":             AudioProtectionScript,
+		"consts/audio-noise.js":       AudioProtectionScript,
+		"consts/audio-real.js":        AudioProtectionRealScript,
 		"consts/automation_bypass.js": AutomationBypassScript,
 	}
 	for f, got := range cases {
@@ -94,6 +99,9 @@ func TestBuildersGolden(t *testing.T) {
 	assertEq(t, "all/toggles",
 		GetAllProtectionScripts(&AllProtectionOptions{WebRTC: new(true), Canvas: new(false), WebGL: new(true), Audio: new(false)}),
 		readFixture(t, "all/toggles.js"))
+	assertEq(t, "all/modes",
+		GetAllProtectionScripts(&AllProtectionOptions{WebRTCMode: "disable", CanvasMode: "real", AudioMode: "noise"}),
+		readFixture(t, "all/modes.js"))
 	assertEq(t, "all/nav_escape",
 		GetAllProtectionScripts(&AllProtectionOptions{Navigator: &NavigatorConfig{Language: "ja-JP", Platform: "Mac<>&", HardwareConcurrency: 16, DeviceMemory: 32}}),
 		readFixture(t, "all/nav_escape.js"))
@@ -133,4 +141,61 @@ func safeSlice(s string, lo, hi int) string {
 		lo = hi
 	}
 	return s[lo:hi]
+}
+
+// TestModeAwareBuilders verifies the mode-aware builders dispatch to the correct
+// script variant and fall back to v1.0 defaults for empty or unrecognized modes.
+func TestModeAwareBuilders(t *testing.T) {
+	assertMode := func(t *testing.T, name, got, want string) {
+		t.Helper()
+		if got != want {
+			t.Errorf("%s: mismatch (got %d bytes, want %d)", name, len(got), len(want))
+		}
+	}
+
+	// WebRTC modes.
+	assertMode(t, "webrtc/disable", CreateWebRTCProtectionScript("disable"), WebRTCProtectionDisableScript)
+	assertMode(t, "webrtc/fake", CreateWebRTCProtectionScript("fake"), WebRTCProtectionScript)
+	assertMode(t, "webrtc/real", CreateWebRTCProtectionScript("real"), "")
+	assertMode(t, "webrtc/empty", CreateWebRTCProtectionScript(""), WebRTCProtectionScript)
+	assertMode(t, "webrtc/unknown", CreateWebRTCProtectionScript("nonsense"), WebRTCProtectionScript)
+	assertMode(t, "webrtc/case", CreateWebRTCProtectionScript("DISABLE"), WebRTCProtectionDisableScript)
+
+	// Canvas modes.
+	assertMode(t, "canvas/noise", CreateCanvasProtectionScript("noise"), CanvasProtectionScript)
+	assertMode(t, "canvas/real", CreateCanvasProtectionScript("real"), "")
+	assertMode(t, "canvas/empty", CreateCanvasProtectionScript(""), CanvasProtectionScript)
+	assertMode(t, "canvas/unknown", CreateCanvasProtectionScript("nonsense"), CanvasProtectionScript)
+	assertMode(t, "canvas/case", CreateCanvasProtectionScript("REAL"), "")
+
+	// Audio modes.
+	assertMode(t, "audio/noise", CreateAudioProtectionScript("noise"), AudioProtectionScript)
+	assertMode(t, "audio/real", CreateAudioProtectionScript("real"), "")
+	assertMode(t, "audio/empty", CreateAudioProtectionScript(""), AudioProtectionScript)
+	assertMode(t, "audio/unknown", CreateAudioProtectionScript("nonsense"), AudioProtectionScript)
+	assertMode(t, "audio/case", CreateAudioProtectionScript("NOISE"), AudioProtectionScript)
+
+	// The *bool toggle still overrides the mode string: disabled surfaces emit nothing.
+	allDisabled := GetAllProtectionScripts(&AllProtectionOptions{
+		WebRTC: new(false), Canvas: new(false), WebGL: new(false), Audio: new(false),
+		WebRTCMode: "disable", CanvasMode: "noise", AudioMode: "noise",
+	})
+	if strings.Contains(allDisabled, "WebRTC") || strings.Contains(allDisabled, "Canvas") || strings.Contains(allDisabled, "Audio") {
+		t.Errorf("disabled surfaces should not emit protection scripts")
+	}
+
+	// Real modes omit the surface from the combined bundle while leaving others intact.
+	allReal := GetAllProtectionScripts(&AllProtectionOptions{WebRTCMode: "real", CanvasMode: "real", AudioMode: "real"})
+	if strings.Contains(allReal, WebRTCProtectionScript) {
+		t.Errorf("webrtc=real should not emit the fake WebRTC script")
+	}
+	if strings.Contains(allReal, CanvasProtectionScript) {
+		t.Errorf("canvas=real should not emit the noise canvas script")
+	}
+	if strings.Contains(allReal, AudioProtectionScript) {
+		t.Errorf("audio=real should not emit the noise audio script")
+	}
+	if !strings.Contains(allReal, WebGLProtectionScript) {
+		t.Errorf("real modes should still leave WebGL protection in place")
+	}
 }
