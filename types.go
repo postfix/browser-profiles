@@ -135,7 +135,46 @@ type WebGLCaps struct {
 	MaxVertexAttribs           int       `json:"maxVertexAttribs,omitempty"`
 }
 
-// WebGLConfig is a WebGL fingerprint configuration. Vendor/Renderer are injected per-profile
+// PluginMimeType describes a single MIME type exposed by a plugin.
+type PluginMimeType struct {
+	Type          string `json:"type"`
+	Description   string `json:"description,omitempty"`
+	Suffixes      string `json:"suffixes,omitempty"`
+	EnabledPlugin string `json:"enabledPlugin,omitempty"`
+}
+
+// PluginInfo describes a single browser plugin entry.
+type PluginInfo struct {
+	Name        string           `json:"name"`
+	Filename    string           `json:"filename"`
+	Description string           `json:"description,omitempty"`
+	Version     string           `json:"version,omitempty"`
+	MimeTypes   []PluginMimeType `json:"mimeTypes,omitempty"`
+}
+
+// PluginsConfig carries the platform-specific plugin and MIME-type lists.
+type PluginsConfig struct {
+	Plugins   []PluginInfo     `json:"plugins,omitempty"`
+	MimeTypes []PluginMimeType `json:"mimeTypes,omitempty"`
+}
+
+// FontsConfig carries a whitelist of font families that document.fonts.check will
+// report as installed. This is a lightweight guard, not a full font spoof: real font
+// presence is an OS-level property, so the guard only prevents naive fingerprinters
+// from observing the absence of common system fonts.
+type FontsConfig struct {
+	Whitelist []string `json:"whitelist,omitempty"`
+}
+
+// PermissionsConfig carries coherent permission states for the four query names
+// most commonly inspected by fingerprinters.
+type PermissionsConfig struct {
+	Camera        string `json:"camera,omitempty"`
+	Microphone    string `json:"microphone,omitempty"`
+	Geolocation   string `json:"geolocation,omitempty"`
+	Notifications string `json:"notifications,omitempty"`
+}
+
 // (F4 resolved): the launcher's WebGL protection (CreateWebGLScript / webgl.tmpl.js) spoofs
 // UNMASKED_VENDOR_WEBGL → Vendor and UNMASKED_RENDERER_WEBGL → Renderer and guarantees the
 // WEBGL_debug_renderer_info extension is present, so a fingerprinter reads this profile's GPU
@@ -166,6 +205,9 @@ type FingerprintConfig struct {
 	Mobile              bool               `json:"mobile,omitempty"`
 	Connection          *NavigatorConnection `json:"connection,omitempty"`
 	ClientHints         *ClientHintsConfig   `json:"clientHints,omitempty"`
+	Permissions         *PermissionsConfig    `json:"permissions,omitempty"`
+	Plugins             *PluginsConfig        `json:"plugins,omitempty"`
+	Fonts               *FontsConfig          `json:"fonts,omitempty"`
 }
 
 // ProfileConfig is the input configuration for a browser profile.

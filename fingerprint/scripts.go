@@ -44,6 +44,9 @@ var (
 	screenTmpl             = mustRead("screen.tmpl.js")
 	clientHintsTmpl        = mustRead("clienthints.tmpl.js")
 	webglTmpl              = mustRead("webgl.tmpl.js")
+	permissionsTmpl        = mustRead("permissions.tmpl.js")
+	pluginsTmpl            = mustRead("plugins.tmpl.js")
+	fontsTmpl              = mustRead("fonts.tmpl.js")
 )
 
 // marshalNoEscape mirrors JS JSON.stringify: compact, no HTML escaping of < > &.
@@ -77,6 +80,156 @@ type NavigatorConnection struct {
 	Downlink      float64 `json:"downlink,omitempty"`
 	Rtt           int     `json:"rtt,omitempty"`
 	SaveData      bool    `json:"saveData,omitempty"`
+}
+
+// PermissionsConfig configures the four permission states returned by
+// navigator.permissions.query. Unknown query names fall back to the real API.
+type PermissionsConfig struct {
+	Camera        string `json:"camera,omitempty"`
+	Microphone    string `json:"microphone,omitempty"`
+	Geolocation   string `json:"geolocation,omitempty"`
+	Notifications string `json:"notifications,omitempty"`
+}
+
+// DefaultPermissionsConfig returns desktop-Chrome defaults for the four common
+// query names: prompt for camera/microphone/geolocation, default for notifications.
+func DefaultPermissionsConfig(platformKey string) PermissionsConfig {
+	_ = platformKey // reserved for future platform-specific defaults
+	return PermissionsConfig{
+		Camera:        "prompt",
+		Microphone:    "prompt",
+		Geolocation:   "prompt",
+		Notifications: "default",
+	}
+}
+
+// CreatePermissionsScript overrides navigator.permissions.query to return coherent
+// states for the configured query names. Unconfigured names fall back to the real
+// navigator.permissions.query.
+func CreatePermissionsScript(c PermissionsConfig) string {
+	m := map[string]string{}
+	if c.Camera != "" {
+		m["camera"] = c.Camera
+	}
+	if c.Microphone != "" {
+		m["microphone"] = c.Microphone
+	}
+	if c.Geolocation != "" {
+		m["geolocation"] = c.Geolocation
+	}
+	if c.Notifications != "" {
+		m["notifications"] = c.Notifications
+	}
+	return strings.ReplaceAll(permissionsTmpl, "%%PERMJSON%%", marshalNoEscape(m))
+}
+
+// PluginMimeType describes a single MIME type entry for navigator.mimeTypes.
+type PluginMimeType struct {
+	Type          string `json:"type"`
+	Description   string `json:"description,omitempty"`
+	Suffixes      string `json:"suffixes,omitempty"`
+	EnabledPlugin string `json:"enabledPlugin,omitempty"`
+}
+
+// PluginInfo describes a single plugin entry for navigator.plugins.
+type PluginInfo struct {
+	Name        string           `json:"name"`
+	Filename    string           `json:"filename"`
+	Description string           `json:"description,omitempty"`
+	Version     string           `json:"version,omitempty"`
+	MimeTypes   []PluginMimeType `json:"mimeTypes,omitempty"`
+}
+
+// PluginsConfig carries the platform-specific plugin and MIME-type lists.
+type PluginsConfig struct {
+	Plugins   []PluginInfo     `json:"plugins,omitempty"`
+	MimeTypes []PluginMimeType `json:"mimeTypes,omitempty"`
+}
+
+// PlatformKey maps a navigator.platform value (Win32, MacIntel, Linux x86_64, etc.)
+// to the canonical platform key used by the default config tables.
+func PlatformKey(platform string) string {
+	switch {
+	case strings.Contains(platform, "Win"):
+		return "windows"
+	case strings.Contains(platform, "Mac"):
+		return "macos"
+	case strings.Contains(platform, "Linux"):
+		return "linux"
+	default:
+		return "windows"
+	}
+}
+
+// DefaultPluginsConfig returns a platform-consistent plugin list for desktop Chrome.
+// Windows includes the Native Client plugin; macOS and Linux do not.
+func DefaultPluginsConfig(platformKey string) PluginsConfig {
+	chromePDFPlugin := PluginInfo{
+		Name:        "Chrome PDF Plugin",
+		Filename:    "internal-pdf-viewer",
+		Description: "Portable Document Format",
+		Version:     "undefined",
+		MimeTypes: []PluginMimeType{
+			{Type: "application/pdf", Description: "Portable Document Format", Suffixes: "pdf"},
+			{Type: "application/x-google-chrome-pdf", Description: "Portable Document Format", Suffixes: "pdf"},
+		},
+	}
+	chromePDFViewer := PluginInfo{
+		Name:        "Chrome PDF Viewer",
+		Filename:    "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+		Description: "Portable Document Format",
+		Version:     "undefined",
+		MimeTypes: []PluginMimeType{
+			{Type: "application/pdf", Description: "Portable Document Format", Suffixes: "pdf"},
+		},
+	}
+	nativeClient := PluginInfo{
+		Name:        "Native Client",
+		Filename:    "internal-nacl-plugin",
+		Description: "",
+		Version:     "undefined",
+		MimeTypes: []PluginMimeType{
+			{Type: "application/x-nacl", Description: "Native Client module", Suffixes: ""},
+			{Type: "application/x-pnacl", Description: "Portable Native Client module", Suffixes: ""},
+		},
+	}
+
+	switch platformKey {
+	case "windows":
+		return PluginsConfig{
+			Plugins: []PluginInfo{chromePDFPlugin, chromePDFViewer, nativeClient},
+			MimeTypes: []PluginMimeType{
+				{Type: "application/pdf", Description: "Portable Document Format", Suffixes: "pdf", EnabledPlugin: "Chrome PDF Viewer"},
+				{Type: "application/x-google-chrome-pdf", Description: "Portable Document Format", Suffixes: "pdf", EnabledPlugin: "Chrome PDF Plugin"},
+				{Type: "application/x-nacl", Description: "Native Client module", Suffixes: "", EnabledPlugin: "Native Client"},
+				{Type: "application/x-pnacl", Description: "Portable Native Client module", Suffixes: "", EnabledPlugin: "Native Client"},
+			},
+		}
+	case "macos", "linux":
+		return PluginsConfig{
+			Plugins: []PluginInfo{chromePDFPlugin, chromePDFViewer},
+			MimeTypes: []PluginMimeType{
+				{Type: "application/pdf", Description: "Portable Document Format", Suffixes: "pdf", EnabledPlugin: "Chrome PDF Viewer"},
+				{Type: "application/x-google-chrome-pdf", Description: "Portable Document Format", Suffixes: "pdf", EnabledPlugin: "Chrome PDF Plugin"},
+			},
+		}
+	default:
+		return PluginsConfig{
+			Plugins: []PluginInfo{chromePDFPlugin, chromePDFViewer},
+			MimeTypes: []PluginMimeType{
+				{Type: "application/pdf", Description: "Portable Document Format", Suffixes: "pdf", EnabledPlugin: "Chrome PDF Viewer"},
+			},
+		}
+	}
+}
+
+// CreatePluginsScript overrides navigator.plugins and navigator.mimeTypes with
+// array-like objects exposing the configured plugin and MIME-type lists.
+func CreatePluginsScript(c PluginsConfig) string {
+	return strings.NewReplacer(
+		"%%PLUGINSJSON%%", marshalNoEscape(c.Plugins),
+		"%%MIMETYPESJSON%%", marshalNoEscape(c.MimeTypes),
+	).Replace(pluginsTmpl)
 }
 
 // CreateNavigatorScript ports createNavigatorScript: embeds JSON.stringify(config).
@@ -135,6 +288,49 @@ func CreateScreenScript(c ScreenScriptConfig) string {
 		"%%PIXELDEPTH%%", strconv.Itoa(pixelDepth),
 		"%%DPR%%", strconv.Itoa(dpr),
 	).Replace(screenTmpl)
+}
+
+// FontsConfig carries a whitelist of font families that document.fonts.check will
+// report as installed. This is a lightweight guard, not a full font spoof: real font
+// presence is an OS-level property, so the guard only prevents naive fingerprinters
+// from observing the absence of common system fonts.
+type FontsConfig struct {
+	Whitelist []string `json:"whitelist,omitempty"`
+}
+
+// DefaultFontsConfig returns a per-OS whitelist of common system fonts. The list is
+// intentionally conservative; fonts not in the whitelist fall back to the real
+// document.fonts.check result.
+func DefaultFontsConfig(platformKey string) FontsConfig {
+	switch platformKey {
+	case "windows":
+		return FontsConfig{Whitelist: []string{
+			"Arial", "Arial Black", "Calibri", "Cambria", "Cambria Math", "Consolas", "Courier New",
+			"Georgia", "Impact", "Lucida Console", "Lucida Sans Unicode", "Microsoft Sans Serif",
+			"Segoe UI", "Segoe UI Symbol", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana",
+		}}
+	case "macos":
+		return FontsConfig{Whitelist: []string{
+			"Helvetica", "Helvetica Neue", "Arial", "Arial Black", "Times New Roman", "Times",
+			"Lucida Grande", "Menlo", "Monaco", "Courier", "Courier New", "Georgia", "Verdana",
+			"Geneva", "Tahoma", "Trebuchet MS",
+		}}
+	case "linux":
+		return FontsConfig{Whitelist: []string{
+			"DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono", "Liberation Sans", "Liberation Serif",
+			"Liberation Mono", "Ubuntu", "Ubuntu Mono", "Noto Sans", "Noto Serif", "Noto Mono",
+			"FreeSans", "FreeSerif", "FreeMono",
+		}}
+	default:
+		return FontsConfig{Whitelist: []string{"Arial", "Helvetica", "Times New Roman", "Verdana"}}
+	}
+}
+
+// CreateFontsScript overrides document.fonts.check so that fonts in the whitelist
+// return true. Fonts not in the whitelist fall back to the real check. An empty
+// whitelist always falls back to the real check.
+func CreateFontsScript(c FontsConfig) string {
+	return strings.ReplaceAll(fontsTmpl, "%%WHITELISTJSON%%", marshalNoEscape(c.Whitelist))
 }
 
 // Brand is a Client Hints brand/version pair.
@@ -368,6 +564,9 @@ type AllProtectionOptions struct {
 	Navigator   *NavigatorConfig
 	WebGLConfig *WebGLScriptConfig // per-profile UNMASKED vendor/renderer; nil ⇒ verbatim webgl.js
 	ClientHints *ClientHintsScriptConfig
+	Permissions *PermissionsConfig
+	Plugins     *PluginsConfig
+	Fonts       *FontsConfig
 }
 
 func enabled(p *bool) bool { return p == nil || *p }
@@ -405,6 +604,15 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 	}
 	if o.ClientHints != nil {
 		scripts = append(scripts, CreateClientHintsScript(*o.ClientHints))
+	}
+	if o.Permissions != nil {
+		scripts = append(scripts, CreatePermissionsScript(*o.Permissions))
+	}
+	if o.Plugins != nil {
+		scripts = append(scripts, CreatePluginsScript(*o.Plugins))
+	}
+	if o.Fonts != nil {
+		scripts = append(scripts, CreateFontsScript(*o.Fonts))
 	}
 	// Always add automation detection bypass.
 	scripts = append(scripts, AutomationBypassScript)
@@ -457,6 +665,9 @@ func GetFingerprintScripts(fp GeneratedFingerprint) string {
 	if s := CreateAudioProtectionScript(fp.Audio); s != "" {
 		scripts = append(scripts, s)
 	}
+	scripts = append(scripts, CreatePermissionsScript(fp.Permissions))
+	scripts = append(scripts, CreatePluginsScript(fp.Plugins))
+	scripts = append(scripts, CreateFontsScript(fp.Fonts))
 	scripts = append(scripts, AutomationBypassScript)
 	return strings.Join(scripts, "\n\n")
 }
