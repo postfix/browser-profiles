@@ -85,13 +85,17 @@ Confirmed existing and added tests cover:
 
 File: `.planning/data/09-detector-baseline.json`
 
-Committed baseline (default run, no network oracles):
+The oracle tests record their result to the baseline file on every run. The committed
+snapshot reflects the default run (network oracles disabled), with the local
+ThumbmarkJS oracle passing and the network oracles (CreepJS, BrowserLeaks) skipped.
+When `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` is set and the pages are reachable, the
+network oracles record their observed scores/values instead.
 
-| Detector | Status | Value / Note |
+| Detector | Default-run status | Notes |
 |---|---|---|
-| ThumbmarkJS | passed | `813da738c099bdcbe719bc4ffb1a3798 / 20e55637979a6a99d8101f49ebb94218` |
-| CreepJS | skipped | `BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1` |
-| BrowserLeaks | skipped | `BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1` |
+| ThumbmarkJS | passed | Uses the vendored local bundle; passes when Chrome is available. |
+| CreepJS | skipped | Skipped unless `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` is set. |
+| BrowserLeaks | skipped | Skipped unless `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` is set. |
 
 When run with `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` on 2026-07-06, the network oracles
 produced:
