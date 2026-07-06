@@ -20,7 +20,7 @@
   "thumbmarkjs": {
     "status": "passed",
     "note": "ThumbmarkJS observed distinct per-profile fingerprints",
-    "value": "af57964f38819a8a28a300a6d9e31c2e / 01e0c9c1c7e2cf0f1ff9ff9f66fbf62a"
+    "value": "a94ffd250178db132acc18727f4e9023 / 25c6e19cf0d0c739a41e7dbd44fb27c5"
   },
   "webgpu_timing_coherence": {
     "status": "passed",
