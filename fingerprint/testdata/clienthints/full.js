@@ -4,16 +4,16 @@
   const spoofedUserAgentData = {
     brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
     mobile: false,
-    platform: 'macOS',
+    platform: "macOS",
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
           mobile: false,
-          platform: 'macOS',
-          platformVersion: '14.2.0',
-          architecture: 'arm',
-          model: '',
-          uaFullVersion: '120.0.6099.71',
+          platform: "macOS",
+          platformVersion: "14.2.0",
+          architecture: "arm",
+          model: "",
+          uaFullVersion: "120.0.6099.71",
           fullVersionList: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}]
         });
       },
@@ -21,7 +21,7 @@
         return {
           brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
           mobile: false,
-          platform: 'macOS'
+          platform: "macOS"
         };
       }
     };
@@ -31,5 +31,5 @@
       configurable: true
     });
   
-  console.log('[browser-profiles] Client Hints spoofing enabled: macOS');
+  console.log('[browser-profiles] Client Hints spoofing enabled: ' + "macOS");
 })();

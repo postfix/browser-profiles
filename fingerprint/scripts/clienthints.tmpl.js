@@ -4,16 +4,16 @@
   const spoofedUserAgentData = {
     brands: %%BRANDSJSON%%,
     mobile: %%MOBILE%%,
-    platform: '%%PLATFORM%%',
+    platform: %%PLATFORM%%,
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: %%BRANDSJSON%%,
           mobile: %%MOBILE%%,
-          platform: '%%PLATFORM%%',
-          platformVersion: '%%PVER%%',
-          architecture: '%%ARCH%%',
-          model: '%%MODEL%%',
-          uaFullVersion: '%%UA_FULL_VERSION%%',
+          platform: %%PLATFORM%%,
+          platformVersion: %%PVER%%,
+          architecture: %%ARCH%%,
+          model: %%MODEL%%,
+          uaFullVersion: %%UA_FULL_VERSION%%,
           fullVersionList: %%BRANDSJSON%%
         });
       },
@@ -21,7 +21,7 @@
         return {
           brands: %%BRANDSJSON%%,
           mobile: %%MOBILE%%,
-          platform: '%%PLATFORM%%'
+          platform: %%PLATFORM%%
         };
       }
     };
@@ -31,5 +31,5 @@
       configurable: true
     });
   
-  console.log('[browser-profiles] Client Hints spoofing enabled: %%PLATFORM%%');
+  console.log('[browser-profiles] Client Hints spoofing enabled: ' + %%PLATFORM%%);
 })();

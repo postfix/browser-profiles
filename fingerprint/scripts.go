@@ -383,12 +383,12 @@ func CreateClientHintsScript(c ClientHintsScriptConfig) string {
 	}
 	return strings.NewReplacer(
 		"%%BRANDSJSON%%", marshalNoEscape(brands),
-		"%%PLATFORM%%", platform,
-		"%%PVER%%", pver,
-		"%%ARCH%%", arch,
-		"%%MODEL%%", c.Model, // TS: config.model || '' ; '' stays ''
+		"%%PLATFORM%%", marshalNoEscape(platform),
+		"%%PVER%%", marshalNoEscape(pver),
+		"%%ARCH%%", marshalNoEscape(arch),
+		"%%MODEL%%", marshalNoEscape(c.Model), // TS: config.model || '' ; '' stays ''
 		"%%MOBILE%%", strconv.FormatBool(c.Mobile),
-		"%%UA_FULL_VERSION%%", fullVersion,
+		"%%UA_FULL_VERSION%%", marshalNoEscape(fullVersion),
 	).Replace(clientHintsTmpl)
 }
 

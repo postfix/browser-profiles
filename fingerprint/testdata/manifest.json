@@ -87,7 +87,7 @@
       "name": "default",
       "fn": "createClientHintsScript",
       "input": {},
-      "len": 1324
+      "len": 1329
     },
     {
       "dir": "clienthints",
@@ -111,7 +111,7 @@
         ],
         "fullVersion": "120.0.6099.71"
       },
-      "len": 1164
+      "len": 1169
     },
     {
       "dir": "clienthints",
@@ -139,7 +139,21 @@
         ],
         "fullVersion": "120.0.6099.130"
       },
-      "len": 1325
+      "len": 1330
+    },
+    {
+      "dir": "clienthints",
+      "name": "escape",
+      "fn": "createClientHintsScript",
+      "input": {
+        "platform": "Plat'\"</script>&<>",
+        "platformVersion": "1.0'\"",
+        "architecture": "arm'\"",
+        "model": "Pixel'\"",
+        "mobile": true,
+        "fullVersion": "120.0'\""
+      },
+      "len": 1380
     },
     {
       "dir": "all",
@@ -218,7 +232,7 @@
           "fullVersion": "120.0.6099.71"
         }
       },
-      "len": 21149
+      "len": 21154
     },
     {
       "dir": "fpscripts",
@@ -273,7 +287,7 @@
           "fullVersion": "120.0.0.0"
         }
       },
-      "len": 26993
+      "len": 26998
     },
     {
       "dir": "webgl",
@@ -438,7 +452,7 @@
           "platformKey": "windows"
         }
       },
-      "len": 27820
+      "len": 27825
     },
     {
       "dir": "permissions",
@@ -549,7 +563,7 @@
           "platformKey": "windows"
         }
       },
-      "len": 27820
+      "len": 27825
     },
     {
       "dir": "webgpu",

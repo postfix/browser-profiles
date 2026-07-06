@@ -4,16 +4,16 @@
   const spoofedUserAgentData = {
     brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
     mobile: false,
-    platform: 'Windows',
+    platform: "Windows",
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
           mobile: false,
-          platform: 'Windows',
-          platformVersion: '10.0.0',
-          architecture: 'x86',
-          model: '',
-          uaFullVersion: '120.0.6099.130',
+          platform: "Windows",
+          platformVersion: "10.0.0",
+          architecture: "x86",
+          model: "",
+          uaFullVersion: "120.0.6099.130",
           fullVersionList: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}]
         });
       },
@@ -21,7 +21,7 @@
         return {
           brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}],
           mobile: false,
-          platform: 'Windows'
+          platform: "Windows"
         };
       }
     };
@@ -31,5 +31,5 @@
       configurable: true
     });
   
-  console.log('[browser-profiles] Client Hints spoofing enabled: Windows');
+  console.log('[browser-profiles] Client Hints spoofing enabled: ' + "Windows");
 })();

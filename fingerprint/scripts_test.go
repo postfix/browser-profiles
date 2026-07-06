@@ -1,6 +1,7 @@
 package fingerprint
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -145,6 +146,17 @@ func TestBuildersGolden(t *testing.T) {
 			FullVersion: "120.0.6099.130",
 		}),
 		readFixture(t, "clienthints/full_version.js"))
+
+	// Escape case (closes security review B-1/M-1): every profile-controlled string
+	// field is JSON-encoded via marshalNoEscape, so `'`, `"`, `\`, `<`, `>`, `&`, and a
+	// literal `</script>` sequence can never break out of the generated JS string
+	// literal. See TestClientHintsScriptNoInjection for the structural safety proof.
+	assertEq(t, "clienthints/escape",
+		CreateClientHintsScript(ClientHintsScriptConfig{
+			Platform: `Plat'"</script>&<>`, PlatformVersion: `1.0'"`, Architecture: `arm'"`,
+			Model: `Pixel'"`, FullVersion: `120.0'"`, Mobile: true,
+		}),
+		readFixture(t, "clienthints/escape.js"))
 
 	assertEq(t, "all/with_clienthints",
 		GetAllProtectionScripts(&AllProtectionOptions{
@@ -530,5 +542,66 @@ func TestTimingBuilder(t *testing.T) {
 	oneMs := CreateTimingScript(TimingConfig{Enabled: true, Precision: 1 * time.Millisecond})
 	if !strings.Contains(oneMs, `"precisionMs":1`) {
 		t.Errorf("1ms precision should serialize as 1.0, got %q", oneMs)
+	}
+}
+
+// TestClientHintsScriptNoInjection is the regression guard for security review
+// finding B-1: CreateClientHintsScript used to substitute Platform/PlatformVersion/
+// Architecture/Model/FullVersion RAW inside single-quoted JS string literals in
+// clienthints.tmpl.js, so a crafted string containing `'` (or `\`) could break out
+// of the literal and execute arbitrary JavaScript in every page the profile
+// launches (empirically proven in .planning/SECURITY-REVIEW-v1.1.md via a counter-
+// increment PoC). The fix routes every field through marshalNoEscape, exactly like
+// CreateWebGLScript's vendor/renderer. This test proves the fix holds structurally,
+// without depending on a JS runtime being available in CI:
+//  1. the JSON-encoded form of the payload (what marshalNoEscape actually produces)
+//     is present in the output — i.e. the field IS going through JSON encoding;
+//  2. the dangerous substring never appears anywhere OUTSIDE that JSON-encoded
+//     literal — i.e. it never escapes into bare, executable JS;
+//  3. the exact pre-fix vulnerable shape (`'<payload>'`, manual quotes around a raw
+//     value) is absent, so the specific CVE pattern cannot silently regress;
+//  4. the JSON-encoded literal parses back to byte-identical original content, so
+//     the escaping is round-trip-safe, not merely non-crashing.
+func TestClientHintsScriptNoInjection(t *testing.T) {
+	const malicious = `x'); alert(1); //<script>&<>\`
+
+	script := CreateClientHintsScript(ClientHintsScriptConfig{
+		Platform:        malicious,
+		PlatformVersion: malicious,
+		Architecture:    malicious,
+		Model:           malicious,
+		FullVersion:     malicious,
+	})
+
+	encoded := marshalNoEscape(malicious)
+	if !strings.Contains(script, encoded) {
+		t.Fatalf("expected JSON-encoded payload %s to appear in generated script:\n%s", encoded, script)
+	}
+
+	// Every occurrence of the dangerous payload must live inside encoded (JSON
+	// string) form. Stripping all such occurrences must remove every trace of the
+	// attacker-controlled "alert(1)" — if any remained, it escaped its literal.
+	stripped := strings.ReplaceAll(script, encoded, "")
+	if strings.Contains(stripped, "alert(1)") {
+		t.Fatalf("payload leaked outside its JSON-encoded literal — injection not closed:\n%s", script)
+	}
+
+	// The specific pre-fix vulnerable pattern (manual single quotes around a raw,
+	// unescaped value) must never reappear.
+	if brokenPattern := "'" + malicious + "'"; strings.Contains(script, brokenPattern) {
+		t.Fatalf("regression: raw payload interpolated inside single-quoted JS literal (CVE B-1 pattern)")
+	}
+	if strings.Contains(script, "alert(1); //<script>&<>\\'") {
+		t.Fatalf("regression: payload broke out of a string literal via a bare trailing quote")
+	}
+
+	// The JSON-encoded literal must round-trip to the exact original payload —
+	// proving the escaping is correct, not just non-crashing.
+	var got string
+	if err := json.Unmarshal([]byte(encoded), &got); err != nil {
+		t.Fatalf("marshalNoEscape output is not valid JSON: %v", err)
+	}
+	if got != malicious {
+		t.Fatalf("payload round-trip mismatch: got %q want %q", got, malicious)
 	}
 }
