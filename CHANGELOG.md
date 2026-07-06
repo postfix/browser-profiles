@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-06
+
+### Changed
+
+- **v1.0 Go-port cutover finalized (Phase 08).** The previously-uncommitted Go implementation was
+  committed and the obsolete TypeScript `src/` tree (plus `package.json`/`tsconfig.json`/
+  `tsup.config.ts`) was removed, leaving a clean working tree. See `[0.3.0-go]` below for the
+  cutover details.
+
+### Added
+
+- **Test hardening (Phase 09).** Root-package coverage raised from a 77.6% baseline to 85.2%.
+  Every anti-detect builder in `fingerprint/scripts.go` is now guarded by a golden fixture pinned
+  in `fingerprint/testdata/checksums.txt` (`TestGoldenFixtureChecksums`). Added Chrome-free unit
+  tests for timezone helpers, the session-reuse probe, CLI happy paths, and the `PatchPage` subset.
+  Geo-IP/proxy integration tests are hermetic (`httptest`/local listeners, no external network
+  calls). Established a detector-oracle baseline (`.planning/data/09-detector-baseline.json`):
+  the local ThumbmarkJS oracle passes; the network oracles (CreepJS, BrowserLeaks) are skip-safe
+  and opt-in via `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1`.
+- **Anti-detect mode fields (Phase 10).** `FingerprintConfig.WebRTC` (`"disable"` / `"fake"` /
+  `"real"`, default `"fake"`), `Canvas` (`"noise"` / `"real"`, default `"noise"`), and `Audio`
+  (`"noise"` / `"real"`, default `"noise"`) now govern the injected script per surface, with the
+  v1.0 default output preserved byte-for-byte.
+- **Navigator coherence and Client Hints (Phase 11).** `navigator.appVersion`, `productSub`,
+  `vendor`, `maxTouchPoints`, `mobile`, and `connection` are now derived from the same generated
+  persona as the rest of the fingerprint. User-Agent Client Hints (`navigator.userAgentData` +
+  `Sec-CH-UA*` request headers, including `Sec-CH-UA-Full-Version-List`) are injected in the core
+  launch path (not only a consumer helper) and applied to every tab. WebGL numeric capabilities
+  (`MAX_TEXTURE_SIZE`, `MAX_VIEWPORT_DIMS`, etc.) are now stable per profile, chosen from a
+  GPU-family table instead of being randomized per call.
+- **Permissions, plugins, and fonts guards (Phase 12).** `navigator.permissions.query` returns
+  coherent, platform-consistent states for `camera`, `microphone`, `geolocation`, and
+  `notifications`. `navigator.plugins`/`navigator.mimeTypes` expose a platform-specific
+  (Windows/macOS/Linux) array-like surface with correct `item`/`namedItem`/`refresh` shapes. A
+  lightweight per-OS `document.fonts.check` whitelist guard was added (see Deferred/caveats: this
+  is not full OS-level font spoofing).
+- **WebGPU and optional timing controls (Phase 13).** `navigator.gpu.requestAdapter()` returns a
+  mocked `GPUAdapter` whose `info` is consistent with the profile's spoofed GPU family. Optional,
+  gated timing spoofing rounds `performance.now()`/`Date.now()` to a configured precision
+  (monotonic, drift-free; off by default). Optional CDP CPU throttling via
+  `FingerprintConfig.CPUThrottlingRate` (off by default, applied once at launch via
+  `Emulation.setCPUThrottlingRate`).
+
+### Notes
+
+- Self-contained detector-oracle coherence checks (`navigator_coherence`,
+  `permissions_plugins_fonts_coherence`, `webgpu_timing_coherence`) all pass in the current
+  baseline, and the ThumbmarkJS oracle records distinct fingerprint hashes across profiles. The
+  network-based oracles (CreepJS, BrowserLeaks) stay opt-in and are not part of the default test
+  run — see `.planning/data/09-detector-baseline.json`.
+- See `README.md` (feature list, "Mode flags", and "Notes") and `docs/ARCHITECTURE.md` (the "v1.1
+  Anti-Detect Surfaces" table) for usage and caveats of every surface above.
+
+### Deferred
+
+- CI pipeline (GitHub Actions running `go build`/`vet`/`test`/`-race` on push and PR).
+- Release tooling (goreleaser, version tags, cross-compiled binaries).
+- TLS / JA3 / JA4 fingerprint spoofing.
+- Behavioral / interaction biometrics (mouse, keyboard, touch realism).
+- DNS leak prevention.
+- Persistent `CreateSession(Temporary: false)`.
+- ExTower HTTP client.
+
 ## [0.3.0-go] - 2026-07-06
 
 ### Changed

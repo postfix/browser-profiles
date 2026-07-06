@@ -13,7 +13,26 @@ Puppeteer/Playwright. Same features, same on-disk profile format, same anti-dete
 
 - 🏠 **Self-hosted** — profiles live on your machine (`~/.aitofy/browser-profiles`), no cloud.
 - 🛡️ **Anti-detect** — WebRTC, Canvas, WebGL, Audio, and automation-bypass fingerprint protection,
-  injected byte-for-byte identically to the reference implementation.
+  injected byte-for-byte identically to the reference implementation. WebRTC/Canvas/Audio each
+  support a **mode flag** (`disable`/`fake`/`real` for WebRTC, `noise`/`real` for Canvas and Audio)
+  — see [🎛️ Mode flags](#-mode-flags).
+- 🧭 **Navigator coherence** — `appVersion`, `productSub`, `vendor`, `maxTouchPoints`, `mobile`, and
+  `connection` are derived from the same generated persona, so `navigator.*` never contradicts itself.
+- 🪪 **Client Hints in the core launch path** — `navigator.userAgentData` + `Sec-CH-UA*` request
+  headers are injected on launch (not only via a consumer helper) and stay coherent across every tab.
+- 🎮 **Stable per-profile WebGL caps** — numeric WebGL parameters (`MAX_TEXTURE_SIZE`,
+  `MAX_VIEWPORT_DIMS`, etc.) are pinned per profile from a GPU-family table instead of being
+  randomized on every call.
+- 🔐 **Permissions guard** — `navigator.permissions.query` returns coherent states for `camera`,
+  `microphone`, `geolocation`, and `notifications`.
+- 🧩 **Platform-specific plugins/mimeTypes** — `navigator.plugins` and `navigator.mimeTypes` expose
+  array-like objects matching the profile's OS (Windows/macOS/Linux).
+- 🔤 **Fonts guard** — a lightweight `document.fonts.check` whitelist per OS (see Notes below for
+  its scope).
+- 🖥️ **WebGPU spoofing** — `navigator.gpu.requestAdapter().info` matches the profile's spoofed GPU
+  family.
+- ⏱️ **Optional timing/CPU-throttling controls** — gated `performance.now()`/`Date.now()` precision
+  rounding and CDP CPU throttling, both off by default (see Notes below).
 - 🌐 **Proxy support** — HTTP, HTTPS, and SOCKS5, **including authenticated proxies** via a local
   credential-injecting forward proxy (Chrome's `--proxy-server` can't carry credentials).
 - 🕒 **Auto timezone** — detected from the proxy IP (ip-api.com) and applied via CDP.
@@ -39,7 +58,13 @@ go install github.com/postfix/browser-profiles/cmd/browser-profiles@latest
 
 Parity with the reference implementation (95% is the practical ceiling for CDP-driven Chrome;
 100% requires a modified Chromium). The injected protection scripts are verified byte-identical
-to the original via golden-string tests.
+to the original via golden-string tests (`fingerprint/testdata/checksums.txt`).
+
+v1.1 adds self-contained coherence checks — navigator, permissions/plugins/fonts, and
+WebGPU/WebGL alignment — plus a ThumbmarkJS run confirming distinct per-profile fingerprints;
+all currently pass (`.planning/data/09-detector-baseline.json`). The network-based oracles
+(CreepJS, BrowserLeaks) are opt-in via `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1` and are skipped
+by default.
 
 ## 🚀 Quick Start
 
@@ -120,6 +145,31 @@ fp := fingerprint.GenerateFingerprint(fingerprint.GenerateFingerprintOptions{
 scripts := fingerprint.GetFingerprintScripts(fp) // inject via page.EvalOnNewDocument(scripts)
 ```
 
+### 🎛️ Mode flags
+
+`FingerprintConfig.WebRTC`, `Canvas`, and `Audio` each take a mode string. An empty or
+unrecognized value falls back to the v1.0 default (**bold** below):
+
+| Field | Valid values | Default behavior |
+|---|---|---|
+| `WebRTC` | `"disable"`, **`"fake"`**, `"real"` | `"fake"` spoofs local/public candidates; `"disable"` removes `RTCPeerConnection`; `"real"` leaves WebRTC untouched. |
+| `Canvas` | **`"noise"`**, `"real"` | `"noise"` adds per-pixel noise to `toDataURL`/`getImageData`; `"real"` leaves the canvas APIs native. |
+| `Audio` | **`"noise"`**, `"real"` | `"noise"` perturbs `AudioBuffer.getChannelData`; `"real"` leaves the Web Audio APIs native. |
+
+```go
+sess, err := bp.CreateSession(bp.CreateSessionOptions{
+	Fingerprint: &bp.FingerprintConfig{
+		WebRTC: "disable", // window.RTCPeerConnection === undefined
+		Canvas: "real",    // skip canvas noise for this profile
+		Audio:  "noise",   // keep the default audio noise
+	},
+})
+```
+
+The same fields work on `ProfileConfig.Fingerprint` (persistent profiles), and on generated
+fingerprints via `GenerateFingerprintOptions.Overrides` (which mutates
+`GeneratedFingerprint.WebRTC`/`Canvas`/`Audio` before injection).
+
 ## 💻 CLI
 
 ```bash
@@ -150,6 +200,19 @@ browser-profiles --version
 - **Profile storage** is byte-format-compatible with the reference `@aitofy/browser-profiles`:
   `~/.aitofy/browser-profiles/profiles/<id>/{config.json,data/}` and `groups/<id>.json`.
 - **Authenticated SOCKS5** is supported (an enhancement over the reference, which rejects it).
+- **The `document.fonts` guard is a lightweight check, not a full font spoof.** It only makes
+  `document.fonts.check(family)` return `true` for a per-OS whitelist (`FingerprintConfig.Fonts.Whitelist`)
+  and falls back to the real check otherwise. True font spoofing requires installing/removing fonts
+  at the OS level, which is outside the scope of a CDP-injection library.
+- **Timing spoofing and CDP CPU throttling are off by default.** Enable them explicitly:
+  ```go
+  cfg := &bp.FingerprintConfig{
+  	Timing:            &bp.TimingConfig{Enabled: true, Precision: time.Millisecond},
+  	CPUThrottlingRate: 2, // 2x slowdown via Emulation.setCPUThrottlingRate; 0 = disabled
+  }
+  ```
+  Timing rounds `performance.now()`/`Date.now()` to `Precision` (monotonic, drift-free); CPU
+  throttling is a per-launch CDP setting only, so it is not re-applied to tabs opened later.
 - Persistent (`Temporary: false`) `CreateSession` is not yet implemented; use a stored profile.
 
 ## License

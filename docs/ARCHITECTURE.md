@@ -56,6 +56,34 @@ Go output to fixtures captured from the reference (`fingerprint/testdata/`), inc
 case (Go's `json.Marshal` HTML-escapes by default; the builders use `SetEscapeHTML(false)` +
 ordered structs to match JS `JSON.stringify`).
 
+## v1.1 Anti-Detect Surfaces
+
+Phases 09–13 added the following surfaces on top of the v1.0 baseline (WebRTC/Canvas/WebGL/Audio/
+automation-bypass). All are additive: a `FingerprintConfig` that omits the new fields produces the
+same injected bundle as v1.0.
+
+| Surface | Req ID | Default behavior |
+|---|---|---|
+| WebRTC mode | ADT-01 | `"fake"` (spoofed candidates); `"disable"` / `"real"` opt in via `FingerprintConfig.WebRTC`. |
+| Canvas mode | ADT-02 | `"noise"`; `"real"` opt in via `FingerprintConfig.Canvas`. |
+| Audio mode | ADT-03 | `"noise"`; `"real"` opt in via `FingerprintConfig.Audio`. |
+| Navigator coherence | ADT-04 | Always on — `appVersion`/`productSub`/`vendor`/`maxTouchPoints`/`mobile`/`connection` are derived from the same persona as `platform`/`userAgent`. |
+| Client Hints (core launch path) | ADT-05 | On for generated fingerprints (`navigator.userAgentData` + `Sec-CH-UA*` request headers via `Network.setUserAgentOverride`, including `FullVersionList`); explicit profiles opt in via `FingerprintConfig.ClientHints`. |
+| WebGL numeric caps | ADT-06 | On — stable per-profile values chosen from a GPU-family table (`webGLCapsForFamily`), not randomized per call. |
+| Permissions API | ADD-01 | On — `navigator.permissions.query` returns platform defaults (`camera`/`microphone`/`geolocation` = `prompt`, `notifications` = `default`); override via `FingerprintConfig.Permissions`. |
+| Plugins / MimeTypes | ADD-02 | On — platform-specific `navigator.plugins`/`navigator.mimeTypes` (Windows adds Native Client; macOS/Linux do not); override via `FingerprintConfig.Plugins`. |
+| Fonts guard | ADD-03 | On — `document.fonts.check` returns `true` for a per-OS whitelist, falls back to the real check otherwise. **Lightweight only**: no OS-level font installation. |
+| WebGPU | ADD-04 | On — `navigator.gpu.requestAdapter().info` matches the profile's GPU family (`DefaultWebGPUConfig`); override via `FingerprintConfig.WebGPU`. |
+| Timing spoofing | ADD-05 | **Off by default** (`FingerprintConfig.Timing.Enabled = false`); when enabled, rounds `performance.now()`/`Date.now()` to `Precision` (default 1ms), monotonic and drift-free. |
+| CDP CPU throttling | ADD-05 | **Off by default** (`FingerprintConfig.CPUThrottlingRate = 0`); applied once at launch via `Emulation.setCPUThrottlingRate`, not re-applied to tabs opened afterward. |
+
+Bundle order (`GetAllProtectionScripts` / `GetFingerprintScripts`):
+
+```
+webrtc → canvas → webgl → audio → webgpu → timing (if enabled) →
+navigator → client-hints → permissions → plugins → fonts → automation-bypass
+```
+
 ## Proxy mechanism
 
 Chrome's `--proxy-server` cannot carry credentials. For authenticated proxies, `resolveProxy`
@@ -89,3 +117,25 @@ helper) assemble the injected bundle.
 - root — profile-store CRUD (`t.TempDir`), launcher B1 flag assertion (browser-free), a real
   headless-Chrome launch smoke test (skips if no Chrome), and the forward-proxy integration tests
   (fake auth-checked HTTP upstream + a minimal fake SOCKS5 server).
+
+### Golden-fixture discipline
+
+Every public builder in `fingerprint/scripts.go` is guarded by a fixture file in
+`fingerprint/testdata/` (e.g. `consts/webrtc-fake.js`, `navigator/coherence.js`,
+`webgpu/nvidia.js`). `fingerprint/testdata/checksums.txt` pins the exact set of fixtures and their
+content; `TestGoldenFixtureChecksums` fails if a fixture is added, removed, or no longer matches
+what's on disk. Any change to an injected script — a new surface, a wording tweak, a bug fix — must
+regenerate the affected fixture(s) and re-run the checksum test before committing, so JS diffs stay
+visible in code review instead of hiding inside a builder function.
+
+### Detector-oracle harness
+
+`detector_oracle_test.go` runs a subset of ThumbmarkJS, CreepJS, and BrowserLeaks checks and
+records the observed status/value to `.planning/data/09-detector-baseline.json` on every run. The
+local ThumbmarkJS oracle (a vendored bundle) always runs when Chrome is available; the two
+network oracles (CreepJS, BrowserLeaks) are skipped unless `BROWSER_PROFILES_RUN_NETWORK_ORACLES=1`
+is set and the target pages are reachable, so the suite never depends on a flaky external service
+by default. Self-contained coherence checks (`navigator_coherence`,
+`permissions_plugins_fonts_coherence`, `webgpu_timing_coherence`) write their pass/fail status to
+the same baseline file, giving one place to see whether a new anti-detect surface introduced an
+internal contradiction (e.g. a WebGPU vendor that disagrees with the spoofed WebGL renderer).
