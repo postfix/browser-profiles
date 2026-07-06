@@ -93,6 +93,48 @@ type ScreenConfig struct {
 	DeviceScaleFactor float64 `json:"deviceScaleFactor,omitempty"`
 }
 
+// Brand is a User-Agent Client Hints brand/version pair.
+type Brand struct {
+	Brand   string `json:"brand"`
+	Version string `json:"version"`
+}
+
+// NavigatorConnection configures the navigator.connection coherence object.
+type NavigatorConnection struct {
+	EffectiveType string  `json:"effectiveType,omitempty"`
+	Downlink      float64 `json:"downlink,omitempty"`
+	Rtt           int     `json:"rtt,omitempty"`
+	SaveData      bool    `json:"saveData,omitempty"`
+}
+
+// ClientHintsConfig carries the User-Agent Client Hints metadata for a profile.
+type ClientHintsConfig struct {
+	Platform        string  `json:"platform,omitempty"`
+	PlatformVersion string  `json:"platformVersion,omitempty"`
+	Architecture    string  `json:"architecture,omitempty"`
+	Model           string  `json:"model,omitempty"`
+	Mobile          bool    `json:"mobile,omitempty"`
+	Brands          []Brand `json:"brands,omitempty"`
+	FullVersion     string  `json:"fullVersion,omitempty"`
+}
+
+// WebGLCaps are stable numeric WebGL parameter values chosen per GPU family.
+type WebGLCaps struct {
+	MaxTextureSize             int       `json:"maxTextureSize,omitempty"`
+	MaxCubeMapTextureSize      int       `json:"maxCubeMapTextureSize,omitempty"`
+	MaxRenderbufferSize        int       `json:"maxRenderbufferSize,omitempty"`
+	MaxVaryingVectors          int       `json:"maxVaryingVectors,omitempty"`
+	MaxVertexUniformVectors    int       `json:"maxVertexUniformVectors,omitempty"`
+	MaxViewportDims            []int     `json:"maxViewportDims,omitempty"`
+	AliasedLineWidthRange      []float64 `json:"aliasedLineWidthRange,omitempty"`
+	AliasedPointSizeRange      []float64 `json:"aliasedPointSizeRange,omitempty"`
+	MaxTextureImageUnits       int       `json:"maxTextureImageUnits,omitempty"`
+	MaxVertexTextureImageUnits int       `json:"maxVertexTextureImageUnits,omitempty"`
+	MaxCombinedTextureImageUnits int     `json:"maxCombinedTextureImageUnits,omitempty"`
+	MaxFragmentUniformVectors  int       `json:"maxFragmentUniformVectors,omitempty"`
+	MaxVertexAttribs           int       `json:"maxVertexAttribs,omitempty"`
+}
+
 // WebGLConfig is a WebGL fingerprint configuration. Vendor/Renderer are injected per-profile
 // (F4 resolved): the launcher's WebGL protection (CreateWebGLScript / webgl.tmpl.js) spoofs
 // UNMASKED_VENDOR_WEBGL → Vendor and UNMASKED_RENDERER_WEBGL → Renderer and guarantees the
@@ -100,22 +142,30 @@ type ScreenConfig struct {
 // identity. Empty fields fall back to generic defaults. The masked VENDOR/RENDERER (7936/7937)
 // stay "WebKit"/"WebKit WebGL" like real Chrome. [DIVERGENCE] the TS reference never wired this.
 type WebGLConfig struct {
-	Vendor   string `json:"vendor,omitempty"`
-	Renderer string `json:"renderer,omitempty"`
+	Vendor   string     `json:"vendor,omitempty"`
+	Renderer string     `json:"renderer,omitempty"`
+	Caps     *WebGLCaps `json:"caps,omitempty"`
 }
 
 // FingerprintConfig is the anti-detect fingerprint configuration.
 type FingerprintConfig struct {
-	UserAgent           string        `json:"userAgent,omitempty"`
-	Language            string        `json:"language,omitempty"`
-	Screen              *ScreenConfig `json:"screen,omitempty"`
-	WebGL               *WebGLConfig  `json:"webgl,omitempty"`
-	Platform            string        `json:"platform,omitempty"`
-	HardwareConcurrency int           `json:"hardwareConcurrency,omitempty"`
-	DeviceMemory        int           `json:"deviceMemory,omitempty"`
-	WebRTC              string        `json:"webrtc,omitempty"` // "disable" | "fake" | "real"
-	Canvas              string        `json:"canvas,omitempty"` // "noise" | "real"
-	Audio               string        `json:"audio,omitempty"`  // "noise" | "real"
+	UserAgent           string             `json:"userAgent,omitempty"`
+	Language            string             `json:"language,omitempty"`
+	Screen              *ScreenConfig      `json:"screen,omitempty"`
+	WebGL               *WebGLConfig       `json:"webgl,omitempty"`
+	Platform            string             `json:"platform,omitempty"`
+	HardwareConcurrency int                `json:"hardwareConcurrency,omitempty"`
+	DeviceMemory        int                `json:"deviceMemory,omitempty"`
+	WebRTC              string             `json:"webrtc,omitempty"` // "disable" | "fake" | "real"
+	Canvas              string             `json:"canvas,omitempty"` // "noise" | "real"
+	Audio               string             `json:"audio,omitempty"`  // "noise" | "real"
+	AppVersion          string             `json:"appVersion,omitempty"`
+	ProductSub          string             `json:"productSub,omitempty"`
+	Vendor              string             `json:"vendor,omitempty"`
+	MaxTouchPoints      int                `json:"maxTouchPoints,omitempty"`
+	Mobile              bool               `json:"mobile,omitempty"`
+	Connection          *NavigatorConnection `json:"connection,omitempty"`
+	ClientHints         *ClientHintsConfig   `json:"clientHints,omitempty"`
 }
 
 // ProfileConfig is the input configuration for a browser profile.

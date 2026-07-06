@@ -1,6 +1,6 @@
 
 (function() {
-  const spoofedProps = {"language":"en-US","platform":"Win32","hardwareConcurrency":8,"deviceMemory":8,"vendor":"Google Inc. (ANGLE)"};
+  const spoofedProps = {"language":"en-US","platform":"Win32","hardwareConcurrency":8,"deviceMemory":8,"vendor":"Google Inc. (ANGLE)","appVersion":"5.0 X","productSub":"20030107","connection":{"effectiveType":"4g","downlink":10,"rtt":50}};
   const navigatorProto = Object.getPrototypeOf(navigator);
   
   // Helper to replace getter with a new value
@@ -22,6 +22,10 @@
     }
   }
   
+  if (spoofedProps.userAgent) {
+    replaceGetter('userAgent', spoofedProps.userAgent);
+  }
+  
   if (spoofedProps.language) {
     replaceGetter('language', spoofedProps.language);
     replaceGetter('languages', [spoofedProps.language, spoofedProps.language.split('-')[0]]);
@@ -41,6 +45,27 @@
   
   if (spoofedProps.vendor) {
     replaceGetter('vendor', spoofedProps.vendor);
+  }
+  
+  if (spoofedProps.appVersion) {
+    replaceGetter('appVersion', spoofedProps.appVersion);
+  }
+  
+  if (spoofedProps.productSub) {
+    replaceGetter('productSub', spoofedProps.productSub);
+  }
+  
+  if (spoofedProps.maxTouchPoints !== undefined && spoofedProps.maxTouchPoints !== null) {
+    replaceGetter('maxTouchPoints', spoofedProps.maxTouchPoints);
+  }
+  
+  if (spoofedProps.mobile !== undefined && spoofedProps.mobile !== null) {
+    replaceGetter('mobile', spoofedProps.mobile);
+  }
+  
+  if (spoofedProps.connection) {
+    const connectionObj = Object.freeze(Object.assign({}, spoofedProps.connection));
+    replaceGetter('connection', connectionObj);
   }
   
   console.log('[browser-profiles] Navigator spoofing enabled:', spoofedProps);
@@ -69,11 +94,10 @@
 
 (function() {
   // Spoof NavigatorUAData for Client Hints API
-  if (navigator.userAgentData) {
-    const spoofedUserAgentData = {
-      brands: [{"brand":"Chromium","version":"120"}],
-      mobile: false,
-      platform: 'Windows',
+  const spoofedUserAgentData = {
+    brands: [{"brand":"Chromium","version":"120"}],
+    mobile: false,
+    platform: 'Windows',
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: [{"brand":"Chromium","version":"120"}],
@@ -82,7 +106,7 @@
           platformVersion: '10.0.0',
           architecture: 'x86',
           model: '',
-          uaFullVersion: '120.0.6099.71',
+          uaFullVersion: '120.0.0.0',
           fullVersionList: [{"brand":"Chromium","version":"120"}]
         });
       },
@@ -99,7 +123,6 @@
       get: () => spoofedUserAgentData,
       configurable: true
     });
-  }
   
   console.log('[browser-profiles] Client Hints spoofing enabled: Windows');
 })();

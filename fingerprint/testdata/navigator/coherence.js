@@ -1,6 +1,6 @@
 
 (function() {
-  const spoofedProps = %%NAVJSON%%;
+  const spoofedProps = {"userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36","language":"en-US","platform":"Win32","hardwareConcurrency":8,"deviceMemory":8,"vendor":"Google Inc.","appVersion":"(Windows NT 10.0; Win64; x64) AppleWebKit/537.36","productSub":"20030107","connection":{"effectiveType":"4g","downlink":10,"rtt":50}};
   const navigatorProto = Object.getPrototypeOf(navigator);
   
   // Helper to replace getter with a new value

@@ -25,27 +25,27 @@
     
     proto.getParameter = function(pname) {
       // Per-profile GPU identity via the UNMASKED_* params (what fingerprinters read).
-      if (pname === 37445) return "Acme Inc."; // UNMASKED_VENDOR_WEBGL
-      if (pname === 37446) return "AcmeGPU-Model-A-9999"; // UNMASKED_RENDERER_WEBGL
+      if (pname === 37445) return "Google Inc. (NVIDIA)"; // UNMASKED_VENDOR_WEBGL
+      if (pname === 37446) return "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080)"; // UNMASKED_RENDERER_WEBGL
       if (pname === 7936) return "WebKit"; // VENDOR (masked; generic, matches real Chrome)
       if (pname === 7937) return "WebKit WebGL"; // RENDERER (masked; generic, matches real Chrome)
       if (pname === 7938) return randomItem(["WebGL 1.0", "WebGL 1.0 (OpenGL ES 2.0 Chromium)"]); // VERSION
       if (pname === 35724) return randomItem(["WebGL GLSL ES 1.0", "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"]); // SHADING_LANGUAGE_VERSION
       
       // Spoof numeric parameters with deterministic or randomized values
-      if (pname === 3379) return randomPower([14, 15]); // MAX_TEXTURE_SIZE
-      if (pname === 34076) return randomPower([14, 15]); // MAX_CUBE_MAP_TEXTURE_SIZE
-      if (pname === 34024) return randomPower([14, 15]); // MAX_RENDERBUFFER_SIZE
-      if (pname === 36347) return randomPower([12, 13]); // MAX_VARYING_VECTORS
-      if (pname === 36348) return 30; // MAX_VERTEX_UNIFORM_VECTORS
-      if (pname === 3386) return randomInt32([13, 14, 15]); // MAX_VIEWPORT_DIMS
-      if (pname === 33902) return randomFloat32([0, 10, 11, 12, 13]); // ALIASED_LINE_WIDTH_RANGE
-      if (pname === 33901) return randomFloat32([0, 10, 11, 12, 13]); // ALIASED_POINT_SIZE_RANGE
-      if (pname === 3413) return randomPower([1, 2, 3, 4]); // MAX_TEXTURE_IMAGE_UNITS
-      if (pname === 35660) return randomPower([1, 2, 3, 4]); // MAX_VERTEX_TEXTURE_IMAGE_UNITS
-      if (pname === 35661) return randomPower([4, 5, 6, 7, 8]); // MAX_COMBINED_TEXTURE_IMAGE_UNITS
-      if (pname === 34930) return randomPower([1, 2, 3, 4]); // MAX_FRAGMENT_UNIFORM_VECTORS
-      if (pname === 36349) return randomPower([10, 11, 12, 13]); // MAX_VERTEX_ATTRIBS
+      if (pname === 3379) return 32768; // MAX_TEXTURE_SIZE
+      if (pname === 34076) return 32768; // MAX_CUBE_MAP_TEXTURE_SIZE
+      if (pname === 34024) return 32768; // MAX_RENDERBUFFER_SIZE
+      if (pname === 36347) return 31; // MAX_VARYING_VECTORS
+      if (pname === 36348) return 4096; // MAX_VERTEX_UNIFORM_VECTORS
+      if (pname === 3386) return [32768,32768]; // MAX_VIEWPORT_DIMS
+      if (pname === 33902) return [1,1]; // ALIASED_LINE_WIDTH_RANGE
+      if (pname === 33901) return [1,2047]; // ALIASED_POINT_SIZE_RANGE
+      if (pname === 3413) return 32; // MAX_TEXTURE_IMAGE_UNITS
+      if (pname === 35660) return 32; // MAX_VERTEX_TEXTURE_IMAGE_UNITS
+      if (pname === 35661) return 192; // MAX_COMBINED_TEXTURE_IMAGE_UNITS
+      if (pname === 34930) return 1024; // MAX_FRAGMENT_UNIFORM_VECTORS
+      if (pname === 36349) return 29; // MAX_VERTEX_ATTRIBS
       
       return originalGetParameter.call(this, pname);
     };

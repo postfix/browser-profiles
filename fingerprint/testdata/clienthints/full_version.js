@@ -13,7 +13,7 @@
           platformVersion: '10.0.0',
           architecture: 'x86',
           model: '',
-          uaFullVersion: '120.0.6099.71',
+          uaFullVersion: '120.0.6099.130',
           fullVersionList: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"},{"brand":"Not_A Brand","version":"8"}]
         });
       },

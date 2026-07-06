@@ -426,9 +426,9 @@ func LaunchChrome(profile *StoredProfile, userDataDir string, opts LaunchOptions
 	return lr, nil
 }
 
-// applyAntiDetect runs the TS CDP override sequence on the default page:
-// Network.enable → SetUserAgent(+metadata) → EvalOnNewDocument(scripts) → timezone → cookies.
-func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
+// applyNetworkUserAgentOverride enables the Network domain and overrides the
+// user agent plus Sec-CH-UA* metadata for the given page. It is idempotent.
+func applyNetworkUserAgentOverride(page *rod.Page, profile *StoredProfile) error {
 	if err := (proto.NetworkEnable{}).Call(page); err != nil {
 		return fmt.Errorf("network enable: %w", err)
 	}
@@ -448,47 +448,120 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 			language = fp.Language
 		}
 	}
+	chCfg := clientHintsConfigFromFingerprint(fp)
 	chPlatform := "Linux"
 	chPlatVer := "14.0.0"
-	switch {
-	case strings.Contains(platform, "Win"):
-		chPlatform, chPlatVer = "Windows", "10.0.0"
-	case strings.Contains(platform, "Mac"):
-		chPlatform = "macOS"
+	chArch := "x86"
+	chMobile := false
+	chBrands := []fingerprint.Brand{
+		{Brand: "Not_A Brand", Version: "8"},
+		{Brand: "Chromium", Version: "120"},
+		{Brand: "Google Chrome", Version: "120"},
+	}
+	chFullVersion := "120.0.0.0"
+	if chCfg != nil {
+		chPlatform = chCfg.Platform
+		chPlatVer = chCfg.PlatformVersion
+		chArch = chCfg.Architecture
+		chMobile = chCfg.Mobile
+		if len(chCfg.Brands) > 0 {
+			chBrands = chCfg.Brands
+		}
+		if chCfg.FullVersion != "" {
+			chFullVersion = chCfg.FullVersion
+		}
+	} else if fp != nil {
+		switch {
+		case strings.Contains(platform, "Win"):
+			chPlatform, chPlatVer = "Windows", "10.0.0"
+		case strings.Contains(platform, "Mac"):
+			chPlatform, chArch = "macOS", "arm"
+		}
+	}
+	brandsProto := make([]*proto.EmulationUserAgentBrandVersion, len(chBrands))
+	fullVersionListProto := make([]*proto.EmulationUserAgentBrandVersion, len(chBrands))
+	for i, b := range chBrands {
+		brandsProto[i] = &proto.EmulationUserAgentBrandVersion{Brand: b.Brand, Version: b.Version}
+		fullVersionListProto[i] = &proto.EmulationUserAgentBrandVersion{Brand: b.Brand, Version: chFullVersion}
 	}
 	meta := &proto.EmulationUserAgentMetadata{
-		Brands: []*proto.EmulationUserAgentBrandVersion{
-			{Brand: "Not_A Brand", Version: "8"},
-			{Brand: "Chromium", Version: "120"},
-			{Brand: "Google Chrome", Version: "120"},
-		},
-		FullVersion:     "120.0.0.0",
+		Brands:          brandsProto,
+		FullVersionList: fullVersionListProto,
+		FullVersion:     chFullVersion,
 		Platform:        chPlatform,
 		PlatformVersion: chPlatVer,
-		Architecture:    "x86",
+		Architecture:    chArch,
 		Model:           "",
-		Mobile:          false,
+		Mobile:          chMobile,
 	}
 	if err := page.SetUserAgent(&proto.NetworkSetUserAgentOverride{
 		UserAgent: ua, AcceptLanguage: language, Platform: platform, UserAgentMetadata: meta,
 	}); err != nil {
 		return fmt.Errorf("set user agent: %w", err)
 	}
+	return nil
+}
+
+// applyAntiDetect runs the TS CDP override sequence on the default page:
+// Network.enable → SetUserAgent(+metadata) → EvalOnNewDocument(scripts) → timezone → cookies.
+func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
+	if err := applyNetworkUserAgentOverride(page, profile); err != nil {
+		return err
+	}
 
 	hw, mem := 8, 8
+	var navCfg fingerprint.NavigatorConfig
+	var webglCfg *fingerprint.WebGLScriptConfig
+	var chCfg *fingerprint.ClientHintsScriptConfig
+	webrtcMode, canvasMode, audioMode := "fake", "noise", "noise"
+	fp := profile.Fingerprint
+	platform := "Win32"
+	language := "en-US"
 	if fp != nil {
+		if fp.Platform != "" {
+			platform = fp.Platform
+		}
+		if fp.Language != "" {
+			language = fp.Language
+		}
 		if fp.HardwareConcurrency != 0 {
 			hw = fp.HardwareConcurrency
 		}
 		if fp.DeviceMemory != 0 {
 			mem = fp.DeviceMemory
 		}
-	}
-	var webglCfg *fingerprint.WebGLScriptConfig
-	webrtcMode, canvasMode, audioMode := "fake", "noise", "noise"
-	if fp != nil {
+		navCfg = fingerprint.NavigatorConfig{
+			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
+			UserAgent: fp.UserAgent, Vendor: fp.Vendor, AppVersion: fp.AppVersion, ProductSub: fp.ProductSub,
+			MaxTouchPoints: fp.MaxTouchPoints, Mobile: fp.Mobile,
+		}
+		if fp.Connection != nil {
+			navCfg.Connection = &fingerprint.NavigatorConnection{
+				EffectiveType: fp.Connection.EffectiveType,
+				Downlink:      fp.Connection.Downlink,
+				Rtt:           fp.Connection.Rtt,
+				SaveData:      fp.Connection.SaveData,
+			}
+		}
 		if fp.WebGL != nil {
 			webglCfg = &fingerprint.WebGLScriptConfig{Vendor: fp.WebGL.Vendor, Renderer: fp.WebGL.Renderer}
+			if fp.WebGL.Caps != nil {
+				webglCfg.Caps = &fingerprint.WebGLCaps{
+					MaxTextureSize:               fp.WebGL.Caps.MaxTextureSize,
+					MaxCubeMapTextureSize:        fp.WebGL.Caps.MaxCubeMapTextureSize,
+					MaxRenderbufferSize:          fp.WebGL.Caps.MaxRenderbufferSize,
+					MaxVaryingVectors:            fp.WebGL.Caps.MaxVaryingVectors,
+					MaxVertexUniformVectors:      fp.WebGL.Caps.MaxVertexUniformVectors,
+					MaxViewportDims:              [2]int{fp.WebGL.Caps.MaxViewportDims[0], fp.WebGL.Caps.MaxViewportDims[1]},
+					AliasedLineWidthRange:        [2]float64{fp.WebGL.Caps.AliasedLineWidthRange[0], fp.WebGL.Caps.AliasedLineWidthRange[1]},
+					AliasedPointSizeRange:        [2]float64{fp.WebGL.Caps.AliasedPointSizeRange[0], fp.WebGL.Caps.AliasedPointSizeRange[1]},
+					MaxTextureImageUnits:         fp.WebGL.Caps.MaxTextureImageUnits,
+					MaxVertexTextureImageUnits:   fp.WebGL.Caps.MaxVertexTextureImageUnits,
+					MaxCombinedTextureImageUnits: fp.WebGL.Caps.MaxCombinedTextureImageUnits,
+					MaxFragmentUniformVectors:    fp.WebGL.Caps.MaxFragmentUniformVectors,
+					MaxVertexAttribs:             fp.WebGL.Caps.MaxVertexAttribs,
+				}
+			}
 		}
 		if fp.WebRTC != "" {
 			webrtcMode = fp.WebRTC
@@ -499,15 +572,16 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 		if fp.Audio != "" {
 			audioMode = fp.Audio
 		}
+	chCfg = clientHintsConfigFromFingerprint(fp)
 	}
+
 	script := fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
-		Navigator: &fingerprint.NavigatorConfig{
-			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
-		},
+		Navigator:   &navCfg,
 		WebGLConfig: webglCfg,
 		WebRTCMode:  webrtcMode,
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
+		ClientHints: chCfg,
 	})
 	if _, err := page.EvalOnNewDocument(script); err != nil {
 		return fmt.Errorf("inject protection scripts: %w", err)

@@ -77,6 +77,167 @@ var platformVersions = map[string][]string{
 	"linux":   {"6.5.0", "5.15.0"},
 }
 
+// WebGL caps table by GPU family. Values are realistic for real GPUs; the seed
+// selects one of the variants within a family so the same profile is stable while
+// different profiles vary.
+type webGLCapsVariant struct {
+	MaxTextureSize             int
+	MaxCubeMapTextureSize      int
+	MaxRenderbufferSize        int
+	MaxVaryingVectors          int
+	MaxVertexUniformVectors    int
+	MaxViewportDims            [2]int
+	AliasedLineWidthRange      [2]float64
+	AliasedPointSizeRange      [2]float64
+	MaxTextureImageUnits       int
+	MaxVertexTextureImageUnits int
+	MaxCombinedTextureImageUnits int
+	MaxFragmentUniformVectors  int
+	MaxVertexAttribs           int
+}
+
+var webGLCapsByFamily = map[string][]webGLCapsVariant{
+	"intel": {
+		{
+			MaxTextureSize: 16384, MaxCubeMapTextureSize: 16384, MaxRenderbufferSize: 16384,
+			MaxVaryingVectors: 30, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{16384, 16384},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 255},
+			MaxTextureImageUnits: 16, MaxVertexTextureImageUnits: 16, MaxCombinedTextureImageUnits: 32,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 16,
+		},
+		{
+			MaxTextureSize: 8192, MaxCubeMapTextureSize: 8192, MaxRenderbufferSize: 8192,
+			MaxVaryingVectors: 30, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{8192, 8192},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 255},
+			MaxTextureImageUnits: 16, MaxVertexTextureImageUnits: 16, MaxCombinedTextureImageUnits: 32,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 16,
+		},
+	},
+	"nvidia": {
+		{
+			MaxTextureSize: 32768, MaxCubeMapTextureSize: 32768, MaxRenderbufferSize: 32768,
+			MaxVaryingVectors: 31, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{32768, 32768},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 2047},
+			MaxTextureImageUnits: 32, MaxVertexTextureImageUnits: 32, MaxCombinedTextureImageUnits: 192,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 29,
+		},
+		{
+			MaxTextureSize: 16384, MaxCubeMapTextureSize: 16384, MaxRenderbufferSize: 16384,
+			MaxVaryingVectors: 31, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{16384, 16384},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 2047},
+			MaxTextureImageUnits: 32, MaxVertexTextureImageUnits: 32, MaxCombinedTextureImageUnits: 192,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 29,
+		},
+	},
+	"amd": {
+		{
+			MaxTextureSize: 16384, MaxCubeMapTextureSize: 16384, MaxRenderbufferSize: 16384,
+			MaxVaryingVectors: 30, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{16384, 16384},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 2047},
+			MaxTextureImageUnits: 32, MaxVertexTextureImageUnits: 32, MaxCombinedTextureImageUnits: 192,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 29,
+		},
+		{
+			MaxTextureSize: 8192, MaxCubeMapTextureSize: 8192, MaxRenderbufferSize: 8192,
+			MaxVaryingVectors: 30, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{8192, 8192},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 2047},
+			MaxTextureImageUnits: 32, MaxVertexTextureImageUnits: 32, MaxCombinedTextureImageUnits: 192,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 29,
+		},
+	},
+	"apple": {
+		{
+			MaxTextureSize: 16384, MaxCubeMapTextureSize: 16384, MaxRenderbufferSize: 16384,
+			MaxVaryingVectors: 31, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{16384, 16384},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 511},
+			MaxTextureImageUnits: 16, MaxVertexTextureImageUnits: 16, MaxCombinedTextureImageUnits: 32,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 30,
+		},
+		{
+			MaxTextureSize: 8192, MaxCubeMapTextureSize: 8192, MaxRenderbufferSize: 8192,
+			MaxVaryingVectors: 31, MaxVertexUniformVectors: 4096,
+			MaxViewportDims: [2]int{8192, 8192},
+			AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 511},
+			MaxTextureImageUnits: 16, MaxVertexTextureImageUnits: 16, MaxCombinedTextureImageUnits: 32,
+			MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 30,
+		},
+	},
+}
+
+// djb2Hash returns a deterministic 32-bit hash of s.
+func djb2Hash(s string) uint32 {
+	var h uint32 = 5381
+	for i := range s {
+		h = ((h << 5) + h) + uint32(s[i])
+	}
+	return h
+}
+
+// webGLCapsForFamily returns a stable WebGLCaps row for the given GPU family and seed.
+func webGLCapsForFamily(family, seed string) WebGLCaps {
+	family = strings.ToLower(strings.TrimSpace(family))
+	variants := webGLCapsByFamily["intel"]
+	if v, ok := webGLCapsByFamily[family]; ok {
+		variants = v
+	}
+	idx := 0
+	if len(variants) > 1 {
+		idx = int(djb2Hash(seed)) % len(variants)
+		if idx < 0 {
+			idx = -idx
+		}
+	}
+	v := variants[idx]
+	return WebGLCaps{
+		MaxTextureSize: v.MaxTextureSize, MaxCubeMapTextureSize: v.MaxCubeMapTextureSize,
+		MaxRenderbufferSize: v.MaxRenderbufferSize, MaxVaryingVectors: v.MaxVaryingVectors,
+		MaxVertexUniformVectors: v.MaxVertexUniformVectors, MaxViewportDims: v.MaxViewportDims,
+		AliasedLineWidthRange: v.AliasedLineWidthRange, AliasedPointSizeRange: v.AliasedPointSizeRange,
+		MaxTextureImageUnits: v.MaxTextureImageUnits, MaxVertexTextureImageUnits: v.MaxVertexTextureImageUnits,
+		MaxCombinedTextureImageUnits: v.MaxCombinedTextureImageUnits, MaxFragmentUniformVectors: v.MaxFragmentUniformVectors,
+		MaxVertexAttribs: v.MaxVertexAttribs,
+	}
+}
+
+// ParseChromeFullVersion extracts a full Chrome version from a user-agent string.
+// If the UA does not contain a Chrome/X.Y.Z.W token, it returns "120.0.0.0".
+func ParseChromeFullVersion(ua string) string {
+	start := strings.Index(ua, "Chrome/")
+	if start == -1 {
+		return "120.0.0.0"
+	}
+	start += len("Chrome/")
+	end := strings.IndexAny(ua[start:], " ")
+	if end == -1 {
+		end = len(ua) - start
+	}
+	ver := ua[start : start+end]
+	// Ensure at least four dotted components.
+	parts := strings.Split(ver, ".")
+	for len(parts) < 4 {
+		parts = append(parts, "0")
+	}
+	return strings.Join(parts[:4], ".")
+}
+
+// appVersionFromUA derives navigator.appVersion from a user-agent string by stripping
+// the leading "Mozilla/" prefix. If the prefix is absent, the full UA is returned.
+// Real Chrome's appVersion is the user agent without the "Mozilla/" prefix.
+func appVersionFromUA(ua string) string {
+	const prefix = "Mozilla/"
+	if strings.HasPrefix(ua, prefix) {
+		return strings.TrimPrefix(ua, prefix)
+	}
+	return ua
+}
+
 // GenerateFingerprintOptions mirrors the TS options. Empty string == "random"/default.
 type GenerateFingerprintOptions struct {
 	Platform string // "windows" | "macos" | "linux" | "random" (default random)
@@ -104,8 +265,9 @@ type ScreenInfo struct {
 
 // WebGLInfo is the generated WebGL block.
 type WebGLInfo struct {
-	Vendor   string `json:"vendor"`
-	Renderer string `json:"renderer"`
+	Vendor   string    `json:"vendor"`
+	Renderer string    `json:"renderer"`
+	Caps     WebGLCaps `json:"caps"`
 }
 
 // ClientHintsInfo is the generated client-hints block.
@@ -115,6 +277,7 @@ type ClientHintsInfo struct {
 	Architecture    string  `json:"architecture"`
 	Mobile          bool    `json:"mobile"`
 	Brands          []Brand `json:"brands"`
+	FullVersion     string  `json:"fullVersion"`
 }
 
 // FingerprintMeta is generation metadata.
@@ -132,6 +295,11 @@ type GeneratedFingerprint struct {
 	HardwareConcurrency int             `json:"hardwareConcurrency"`
 	DeviceMemory        int             `json:"deviceMemory"`
 	Vendor              string          `json:"vendor"`
+	AppVersion          string          `json:"appVersion"`
+	ProductSub          string          `json:"productSub"`
+	MaxTouchPoints      int             `json:"maxTouchPoints"`
+	Mobile              bool            `json:"mobile"`
+	Connection          NavigatorConnection `json:"connection"`
 	Screen              ScreenInfo      `json:"screen"`
 	WebGL               WebGLInfo       `json:"webgl"`
 	ClientHints         ClientHintsInfo `json:"clientHints"`
@@ -224,6 +392,16 @@ func GenerateFingerprint(opts GenerateFingerprintOptions) GeneratedFingerprint {
 		HardwareConcurrency: hardwareConcurrency,
 		DeviceMemory:        deviceMemory,
 		Vendor:              pc.Vendor,
+		AppVersion:          appVersionFromUA(userAgent),
+		ProductSub:          "20030107",
+		MaxTouchPoints:      0,
+		Mobile:              false,
+		Connection: NavigatorConnection{
+			EffectiveType: "4g",
+			Downlink:      10,
+			Rtt:           50,
+			SaveData:      false,
+		},
 		Screen: ScreenInfo{
 			Width:            res.Width,
 			Height:           res.Height,
@@ -236,6 +414,7 @@ func GenerateFingerprint(opts GenerateFingerprintOptions) GeneratedFingerprint {
 		WebGL: WebGLInfo{
 			Vendor:   "Google Inc. (ANGLE)",
 			Renderer: webglRenderer,
+			Caps:     webGLCapsForFamily(selGpu, seed),
 		},
 		ClientHints: ClientHintsInfo{
 			Platform:        clientHintsPlatforms[selPlat],
@@ -247,6 +426,7 @@ func GenerateFingerprint(opts GenerateFingerprintOptions) GeneratedFingerprint {
 				{Brand: "Google Chrome", Version: strconv.Itoa(version)},
 				{Brand: "Not_A Brand", Version: "8"},
 			},
+			FullVersion: ParseChromeFullVersion(userAgent),
 		},
 		Meta: FingerprintMeta{
 			GeneratedAt: time.Now(),

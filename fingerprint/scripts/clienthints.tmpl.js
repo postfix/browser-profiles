@@ -1,11 +1,10 @@
 
 (function() {
   // Spoof NavigatorUAData for Client Hints API
-  if (navigator.userAgentData) {
-    const spoofedUserAgentData = {
-      brands: %%BRANDSJSON%%,
-      mobile: %%MOBILE%%,
-      platform: '%%PLATFORM%%',
+  const spoofedUserAgentData = {
+    brands: %%BRANDSJSON%%,
+    mobile: %%MOBILE%%,
+    platform: '%%PLATFORM%%',
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: %%BRANDSJSON%%,
@@ -14,7 +13,7 @@
           platformVersion: '%%PVER%%',
           architecture: '%%ARCH%%',
           model: '%%MODEL%%',
-          uaFullVersion: '120.0.6099.71',
+          uaFullVersion: '%%UA_FULL_VERSION%%',
           fullVersionList: %%BRANDSJSON%%
         });
       },
@@ -31,7 +30,6 @@
       get: () => spoofedUserAgentData,
       configurable: true
     });
-  }
   
   console.log('[browser-profiles] Client Hints spoofing enabled: %%PLATFORM%%');
 })();

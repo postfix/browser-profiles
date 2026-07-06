@@ -32,20 +32,20 @@
       if (pname === 7938) return randomItem(["WebGL 1.0", "WebGL 1.0 (OpenGL ES 2.0 Chromium)"]); // VERSION
       if (pname === 35724) return randomItem(["WebGL GLSL ES 1.0", "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"]); // SHADING_LANGUAGE_VERSION
       
-      // Spoof numeric parameters with randomized values
-      if (pname === 3379) return randomPower([14, 15]); // MAX_TEXTURE_SIZE
-      if (pname === 34076) return randomPower([14, 15]); // MAX_CUBE_MAP_TEXTURE_SIZE
-      if (pname === 34024) return randomPower([14, 15]); // MAX_RENDERBUFFER_SIZE
-      if (pname === 36347) return randomPower([12, 13]); // MAX_VARYING_VECTORS
-      if (pname === 36348) return 30; // MAX_VERTEX_UNIFORM_VECTORS
-      if (pname === 3386) return randomInt32([13, 14, 15]); // MAX_VIEWPORT_DIMS
-      if (pname === 33902) return randomFloat32([0, 10, 11, 12, 13]); // ALIASED_LINE_WIDTH_RANGE
-      if (pname === 33901) return randomFloat32([0, 10, 11, 12, 13]); // ALIASED_POINT_SIZE_RANGE
-      if (pname === 3413) return randomPower([1, 2, 3, 4]); // MAX_TEXTURE_IMAGE_UNITS
-      if (pname === 35660) return randomPower([1, 2, 3, 4]); // MAX_VERTEX_TEXTURE_IMAGE_UNITS
-      if (pname === 35661) return randomPower([4, 5, 6, 7, 8]); // MAX_COMBINED_TEXTURE_IMAGE_UNITS
-      if (pname === 34930) return randomPower([1, 2, 3, 4]); // MAX_FRAGMENT_UNIFORM_VECTORS
-      if (pname === 36349) return randomPower([10, 11, 12, 13]); // MAX_VERTEX_ATTRIBS
+      // Spoof numeric parameters with deterministic or randomized values
+      if (pname === 3379) return %%MAX_TEXTURE_SIZE%%; // MAX_TEXTURE_SIZE
+      if (pname === 34076) return %%MAX_CUBE_MAP_TEXTURE_SIZE%%; // MAX_CUBE_MAP_TEXTURE_SIZE
+      if (pname === 34024) return %%MAX_RENDERBUFFER_SIZE%%; // MAX_RENDERBUFFER_SIZE
+      if (pname === 36347) return %%MAX_VARYING_VECTORS%%; // MAX_VARYING_VECTORS
+      if (pname === 36348) return %%MAX_VERTEX_UNIFORM_VECTORS%%; // MAX_VERTEX_UNIFORM_VECTORS
+      if (pname === 3386) return %%MAX_VIEWPORT_DIMS%%; // MAX_VIEWPORT_DIMS
+      if (pname === 33902) return %%ALIASED_LINE_WIDTH_RANGE%%; // ALIASED_LINE_WIDTH_RANGE
+      if (pname === 33901) return %%ALIASED_POINT_SIZE_RANGE%%; // ALIASED_POINT_SIZE_RANGE
+      if (pname === 3413) return %%MAX_TEXTURE_IMAGE_UNITS%%; // MAX_TEXTURE_IMAGE_UNITS
+      if (pname === 35660) return %%MAX_VERTEX_TEXTURE_IMAGE_UNITS%%; // MAX_VERTEX_TEXTURE_IMAGE_UNITS
+      if (pname === 35661) return %%MAX_COMBINED_TEXTURE_IMAGE_UNITS%%; // MAX_COMBINED_TEXTURE_IMAGE_UNITS
+      if (pname === 34930) return %%MAX_FRAGMENT_UNIFORM_VECTORS%%; // MAX_FRAGMENT_UNIFORM_VECTORS
+      if (pname === 36349) return %%MAX_VERTEX_ATTRIBS%%; // MAX_VERTEX_ATTRIBS
       
       return originalGetParameter.call(this, pname);
     };

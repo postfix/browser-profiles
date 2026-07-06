@@ -59,12 +59,24 @@ func marshalNoEscape(v any) string {
 // TS type declaration (userAgent, language, platform, hardwareConcurrency, deviceMemory,
 // vendor) so JSON.stringify parity holds for the library's own call sites.
 type NavigatorConfig struct {
-	UserAgent           string `json:"userAgent,omitempty"`
-	Language            string `json:"language,omitempty"`
-	Platform            string `json:"platform,omitempty"`
-	HardwareConcurrency int    `json:"hardwareConcurrency,omitempty"`
-	DeviceMemory        int    `json:"deviceMemory,omitempty"`
-	Vendor              string `json:"vendor,omitempty"`
+	UserAgent           string             `json:"userAgent,omitempty"`
+	Language            string             `json:"language,omitempty"`
+	Platform            string             `json:"platform,omitempty"`
+	HardwareConcurrency int                `json:"hardwareConcurrency,omitempty"`
+	DeviceMemory        int                `json:"deviceMemory,omitempty"`
+	Vendor              string             `json:"vendor,omitempty"`
+	AppVersion          string             `json:"appVersion,omitempty"`
+	ProductSub          string             `json:"productSub,omitempty"`
+	MaxTouchPoints      int                `json:"maxTouchPoints,omitempty"`
+	Mobile              bool               `json:"mobile,omitempty"`
+	Connection          *NavigatorConnection `json:"connection,omitempty"`
+}
+
+type NavigatorConnection struct {
+	EffectiveType string  `json:"effectiveType,omitempty"`
+	Downlink      float64 `json:"downlink,omitempty"`
+	Rtt           int     `json:"rtt,omitempty"`
+	SaveData      bool    `json:"saveData,omitempty"`
 }
 
 // CreateNavigatorScript ports createNavigatorScript: embeds JSON.stringify(config).
@@ -139,6 +151,7 @@ type ClientHintsScriptConfig struct {
 	Model           string
 	Mobile          bool
 	Brands          []Brand
+	FullVersion     string
 }
 
 var defaultBrands = []Brand{
@@ -165,6 +178,10 @@ func CreateClientHintsScript(c ClientHintsScriptConfig) string {
 	if len(brands) == 0 {
 		brands = defaultBrands
 	}
+	fullVersion := c.FullVersion
+	if fullVersion == "" {
+		fullVersion = "120.0.6099.71"
+	}
 	return strings.NewReplacer(
 		"%%BRANDSJSON%%", marshalNoEscape(brands),
 		"%%PLATFORM%%", platform,
@@ -172,13 +189,31 @@ func CreateClientHintsScript(c ClientHintsScriptConfig) string {
 		"%%ARCH%%", arch,
 		"%%MODEL%%", c.Model, // TS: config.model || '' ; '' stays ''
 		"%%MOBILE%%", strconv.FormatBool(c.Mobile),
+		"%%UA_FULL_VERSION%%", fullVersion,
 	).Replace(clientHintsTmpl)
+}
+
+type WebGLCaps struct {
+	MaxTextureSize             int
+	MaxCubeMapTextureSize      int
+	MaxRenderbufferSize        int
+	MaxVaryingVectors          int
+	MaxVertexUniformVectors    int
+	MaxViewportDims            [2]int
+	AliasedLineWidthRange      [2]float64
+	AliasedPointSizeRange      [2]float64
+	MaxTextureImageUnits       int
+	MaxVertexTextureImageUnits int
+	MaxCombinedTextureImageUnits int
+	MaxFragmentUniformVectors  int
+	MaxVertexAttribs           int
 }
 
 // WebGLScriptConfig configures the per-profile WebGL spoof used by CreateWebGLScript.
 type WebGLScriptConfig struct {
 	Vendor   string
 	Renderer string
+	Caps     *WebGLCaps
 }
 
 // Static default expressions for the parameterized WebGL script when a field is unset —
@@ -186,6 +221,23 @@ type WebGLScriptConfig struct {
 const (
 	defaultWebGLVendorExpr   = `"Google Inc."`
 	defaultWebGLRendererExpr = `randomItem(["ANGLE (Intel, Intel(R) HD Graphics)", "ANGLE (NVIDIA, GeForce GTX 1080)", "ANGLE (AMD, Radeon RX 580)"])`
+)
+
+// defaultWebGLCapsExprs are the randomized fallback expressions used when Caps is nil.
+const (
+	defaultMaxTextureSizeExpr             = `randomPower([14, 15])`
+	defaultMaxCubeMapTextureSizeExpr      = `randomPower([14, 15])`
+	defaultMaxRenderbufferSizeExpr        = `randomPower([14, 15])`
+	defaultMaxVaryingVectorsExpr          = `randomPower([12, 13])`
+	defaultMaxVertexUniformVectorsExpr    = `30`
+	defaultMaxViewportDimsExpr            = `randomInt32([13, 14, 15])`
+	defaultAliasedLineWidthRangeExpr      = `randomFloat32([0, 10, 11, 12, 13])`
+	defaultAliasedPointSizeRangeExpr      = `randomFloat32([0, 10, 11, 12, 13])`
+	defaultMaxTextureImageUnitsExpr       = `randomPower([1, 2, 3, 4])`
+	defaultMaxVertexTextureImageUnitsExpr = `randomPower([1, 2, 3, 4])`
+	defaultMaxCombinedTextureImageUnitsExpr = `randomPower([4, 5, 6, 7, 8])`
+	defaultMaxFragmentUniformVectorsExpr  = `randomPower([1, 2, 3, 4])`
+	defaultMaxVertexAttribsExpr           = `randomPower([10, 11, 12, 13])`
 )
 
 // CreateWebGLScript builds a WebGL protection script that spoofs UNMASKED_VENDOR_WEBGL /
@@ -202,8 +254,51 @@ func CreateWebGLScript(c WebGLScriptConfig) string {
 	if c.Renderer != "" {
 		renderer = marshalNoEscape(c.Renderer)
 	}
-	s := strings.ReplaceAll(webglTmpl, "%%WEBGL_VENDOR%%", vendor)
-	return strings.ReplaceAll(s, "%%WEBGL_RENDERER%%", renderer)
+	maxTextureSize := defaultMaxTextureSizeExpr
+	maxCubeMapTextureSize := defaultMaxCubeMapTextureSizeExpr
+	maxRenderbufferSize := defaultMaxRenderbufferSizeExpr
+	maxVaryingVectors := defaultMaxVaryingVectorsExpr
+	maxVertexUniformVectors := defaultMaxVertexUniformVectorsExpr
+	maxViewportDims := defaultMaxViewportDimsExpr
+	aliasedLineWidthRange := defaultAliasedLineWidthRangeExpr
+	aliasedPointSizeRange := defaultAliasedPointSizeRangeExpr
+	maxTextureImageUnits := defaultMaxTextureImageUnitsExpr
+	maxVertexTextureImageUnits := defaultMaxVertexTextureImageUnitsExpr
+	maxCombinedTextureImageUnits := defaultMaxCombinedTextureImageUnitsExpr
+	maxFragmentUniformVectors := defaultMaxFragmentUniformVectorsExpr
+	maxVertexAttribs := defaultMaxVertexAttribsExpr
+	if c.Caps != nil {
+		maxTextureSize = strconv.Itoa(c.Caps.MaxTextureSize)
+		maxCubeMapTextureSize = strconv.Itoa(c.Caps.MaxCubeMapTextureSize)
+		maxRenderbufferSize = strconv.Itoa(c.Caps.MaxRenderbufferSize)
+		maxVaryingVectors = strconv.Itoa(c.Caps.MaxVaryingVectors)
+		maxVertexUniformVectors = strconv.Itoa(c.Caps.MaxVertexUniformVectors)
+		maxViewportDims = marshalNoEscape(c.Caps.MaxViewportDims)
+		aliasedLineWidthRange = marshalNoEscape(c.Caps.AliasedLineWidthRange)
+		aliasedPointSizeRange = marshalNoEscape(c.Caps.AliasedPointSizeRange)
+		maxTextureImageUnits = strconv.Itoa(c.Caps.MaxTextureImageUnits)
+		maxVertexTextureImageUnits = strconv.Itoa(c.Caps.MaxVertexTextureImageUnits)
+		maxCombinedTextureImageUnits = strconv.Itoa(c.Caps.MaxCombinedTextureImageUnits)
+		maxFragmentUniformVectors = strconv.Itoa(c.Caps.MaxFragmentUniformVectors)
+		maxVertexAttribs = strconv.Itoa(c.Caps.MaxVertexAttribs)
+	}
+	return strings.NewReplacer(
+		"%%WEBGL_VENDOR%%", vendor,
+		"%%WEBGL_RENDERER%%", renderer,
+		"%%MAX_TEXTURE_SIZE%%", maxTextureSize,
+		"%%MAX_CUBE_MAP_TEXTURE_SIZE%%", maxCubeMapTextureSize,
+		"%%MAX_RENDERBUFFER_SIZE%%", maxRenderbufferSize,
+		"%%MAX_VARYING_VECTORS%%", maxVaryingVectors,
+		"%%MAX_VERTEX_UNIFORM_VECTORS%%", maxVertexUniformVectors,
+		"%%MAX_VIEWPORT_DIMS%%", maxViewportDims,
+		"%%ALIASED_LINE_WIDTH_RANGE%%", aliasedLineWidthRange,
+		"%%ALIASED_POINT_SIZE_RANGE%%", aliasedPointSizeRange,
+		"%%MAX_TEXTURE_IMAGE_UNITS%%", maxTextureImageUnits,
+		"%%MAX_VERTEX_TEXTURE_IMAGE_UNITS%%", maxVertexTextureImageUnits,
+		"%%MAX_COMBINED_TEXTURE_IMAGE_UNITS%%", maxCombinedTextureImageUnits,
+		"%%MAX_FRAGMENT_UNIFORM_VECTORS%%", maxFragmentUniformVectors,
+		"%%MAX_VERTEX_ATTRIBS%%", maxVertexAttribs,
+	).Replace(webglTmpl)
 }
 
 // normalizeMode trims and lowercases a mode string. Empty input returns the default.
@@ -272,6 +367,7 @@ type AllProtectionOptions struct {
 	AudioMode   string
 	Navigator   *NavigatorConfig
 	WebGLConfig *WebGLScriptConfig // per-profile UNMASKED vendor/renderer; nil ⇒ verbatim webgl.js
+	ClientHints *ClientHintsScriptConfig
 }
 
 func enabled(p *bool) bool { return p == nil || *p }
@@ -307,6 +403,9 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 	if o.Navigator != nil {
 		scripts = append(scripts, CreateNavigatorScript(*o.Navigator))
 	}
+	if o.ClientHints != nil {
+		scripts = append(scripts, CreateClientHintsScript(*o.ClientHints))
+	}
 	// Always add automation detection bypass.
 	scripts = append(scripts, AutomationBypassScript)
 	return strings.Join(scripts, "\n\n")
@@ -324,6 +423,11 @@ func GetFingerprintScripts(fp GeneratedFingerprint) string {
 			HardwareConcurrency: fp.HardwareConcurrency,
 			DeviceMemory:        fp.DeviceMemory,
 			Vendor:              fp.Vendor,
+			AppVersion:          fp.AppVersion,
+			ProductSub:          fp.ProductSub,
+			MaxTouchPoints:      fp.MaxTouchPoints,
+			Mobile:              fp.Mobile,
+			Connection:          &fp.Connection,
 		}),
 		CreateScreenScript(ScreenScriptConfig{
 			Width:            fp.Screen.Width,
@@ -340,6 +444,7 @@ func GetFingerprintScripts(fp GeneratedFingerprint) string {
 			Architecture:    fp.ClientHints.Architecture,
 			Mobile:          fp.ClientHints.Mobile,
 			Brands:          fp.ClientHints.Brands,
+			FullVersion:     fp.ClientHints.FullVersion,
 		}),
 	}
 	if s := CreateWebRTCProtectionScript(fp.WebRTC); s != "" {

@@ -17,7 +17,7 @@
         "hardwareConcurrency": 8,
         "deviceMemory": 8
       },
-      "len": 1342
+      "len": 2007
     },
     {
       "dir": "navigator",
@@ -31,14 +31,38 @@
         "deviceMemory": 16,
         "vendor": "Google Inc."
       },
-      "len": 1410
+      "len": 2075
     },
     {
       "dir": "navigator",
       "name": "empty",
       "fn": "createNavigatorScript",
       "input": {},
-      "len": 1264
+      "len": 1929
+    },
+    {
+      "dir": "navigator",
+      "name": "coherence",
+      "fn": "createNavigatorScript",
+      "input": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "language": "en-US",
+        "platform": "Win32",
+        "hardwareConcurrency": 8,
+        "deviceMemory": 8,
+        "vendor": "Google Inc.",
+        "appVersion": "(Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "productSub": "20030107",
+        "maxTouchPoints": 0,
+        "mobile": false,
+        "connection": {
+          "effectiveType": "4g",
+          "downlink": 10,
+          "rtt": 50,
+          "saveData": false
+        }
+      },
+      "len": 2252
     },
     {
       "dir": "screen",
@@ -84,9 +108,38 @@
             "brand": "Google Chrome",
             "version": "120"
           }
-        ]
+        ],
+        "fullVersion": "120.0.6099.71"
       },
       "len": 1209
+    },
+    {
+      "dir": "clienthints",
+      "name": "full_version",
+      "fn": "createClientHintsScript",
+      "input": {
+        "platform": "Windows",
+        "platformVersion": "10.0.0",
+        "architecture": "x86",
+        "model": "",
+        "mobile": false,
+        "brands": [
+          {
+            "brand": "Chromium",
+            "version": "120"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "120"
+          },
+          {
+            "brand": "Not_A Brand",
+            "version": "8"
+          }
+        ],
+        "fullVersion": "120.0.6099.130"
+      },
+      "len": 1370
     },
     {
       "dir": "all",
@@ -107,7 +160,7 @@
           "deviceMemory": 8
         }
       },
-      "len": 18877
+      "len": 19542
     },
     {
       "dir": "all",
@@ -123,6 +176,17 @@
     },
     {
       "dir": "all",
+      "name": "modes",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "webrtcMode": "disable",
+        "canvasMode": "real",
+        "audioMode": "noise"
+      },
+      "len": 13194
+    },
+    {
+      "dir": "all",
       "name": "nav_escape",
       "fn": "getAllProtectionScripts",
       "input": {
@@ -133,7 +197,28 @@
           "deviceMemory": 32
         }
       },
-      "len": 18880
+      "len": 19545
+    },
+    {
+      "dir": "all",
+      "name": "with_clienthints",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "en-US",
+          "platform": "Win32",
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8
+        },
+        "clientHints": {
+          "platform": "Windows",
+          "platformVersion": "10.0.0",
+          "architecture": "x86",
+          "mobile": false,
+          "fullVersion": "120.0.6099.71"
+        }
+      },
+      "len": 20913
     },
     {
       "dir": "fpscripts",
@@ -150,6 +235,16 @@
         "hardwareConcurrency": 8,
         "deviceMemory": 8,
         "vendor": "Google Inc. (ANGLE)",
+        "appVersion": "5.0 X",
+        "productSub": "20030107",
+        "maxTouchPoints": 0,
+        "mobile": false,
+        "connection": {
+          "effectiveType": "4g",
+          "downlink": 10,
+          "rtt": 50,
+          "saveData": false
+        },
         "screen": {
           "width": 1920,
           "height": 1080,
@@ -174,10 +269,56 @@
               "brand": "Chromium",
               "version": "120"
             }
-          ]
+          ],
+          "fullVersion": "120.0.0.0"
         }
       },
-      "len": 20911
+      "len": 21676
+    },
+    {
+      "dir": "webgl",
+      "name": "custom",
+      "fn": "createWebGLScript",
+      "input": {
+        "vendor": "Acme Inc.",
+        "renderer": "AcmeGPU-Model-A-9999"
+      },
+      "len": 4290
+    },
+    {
+      "dir": "webgl",
+      "name": "escape",
+      "fn": "createWebGLScript",
+      "input": {
+        "vendor": "Ac<me>&\"Co\"",
+        "renderer": "GPU <x> & \"y\" \\z/"
+      },
+      "len": 4294
+    },
+    {
+      "dir": "webgl",
+      "name": "caps",
+      "fn": "createWebGLScript",
+      "input": {
+        "vendor": "Google Inc. (NVIDIA)",
+        "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080)",
+        "caps": {
+          "maxTextureSize": 32768,
+          "maxCubeMapTextureSize": 32768,
+          "maxRenderbufferSize": 32768,
+          "maxVaryingVectors": 31,
+          "maxVertexUniformVectors": 4096,
+          "maxViewportDims": [32768, 32768],
+          "aliasedLineWidthRange": [1, 1],
+          "aliasedPointSizeRange": [1, 2047],
+          "maxTextureImageUnits": 32,
+          "maxVertexTextureImageUnits": 32,
+          "maxCombinedTextureImageUnits": 192,
+          "maxFragmentUniformVectors": 1024,
+          "maxVertexAttribs": 29
+        }
+      },
+      "len": 4069
     }
   ]
 }

@@ -1,11 +1,10 @@
 
 (function() {
   // Spoof NavigatorUAData for Client Hints API
-  if (navigator.userAgentData) {
-    const spoofedUserAgentData = {
-      brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
-      mobile: false,
-      platform: 'macOS',
+  const spoofedUserAgentData = {
+    brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
+    mobile: false,
+    platform: 'macOS',
       getHighEntropyValues: function(hints) {
         return Promise.resolve({
           brands: [{"brand":"Chromium","version":"120"},{"brand":"Google Chrome","version":"120"}],
@@ -31,7 +30,6 @@
       get: () => spoofedUserAgentData,
       configurable: true
     });
-  }
   
   console.log('[browser-profiles] Client Hints spoofing enabled: macOS');
 })();

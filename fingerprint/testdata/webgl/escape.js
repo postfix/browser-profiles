@@ -32,7 +32,7 @@
       if (pname === 7938) return randomItem(["WebGL 1.0", "WebGL 1.0 (OpenGL ES 2.0 Chromium)"]); // VERSION
       if (pname === 35724) return randomItem(["WebGL GLSL ES 1.0", "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"]); // SHADING_LANGUAGE_VERSION
       
-      // Spoof numeric parameters with randomized values
+      // Spoof numeric parameters with deterministic or randomized values
       if (pname === 3379) return randomPower([14, 15]); // MAX_TEXTURE_SIZE
       if (pname === 34076) return randomPower([14, 15]); // MAX_CUBE_MAP_TEXTURE_SIZE
       if (pname === 34024) return randomPower([14, 15]); // MAX_RENDERBUFFER_SIZE

@@ -7,9 +7,14 @@
     "status": "skipped",
     "note": "BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1"
   },
+  "navigator_coherence": {
+    "status": "passed",
+    "note": "navigator coherence self-check passed",
+    "value": "no contradictions"
+  },
   "thumbmarkjs": {
     "status": "passed",
     "note": "ThumbmarkJS observed distinct per-profile fingerprints",
-    "value": "6c3c6c6bf617c820e689de9567686930 / 8dc73529b8cdd9f632822b4428396115"
+    "value": "c20ac0b8965c1791df313729b2a369cc / 6c34c95f2a4c973722af7660df3e8e1e"
   }
 }

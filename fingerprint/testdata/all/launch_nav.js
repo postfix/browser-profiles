@@ -300,6 +300,10 @@
     }
   }
   
+  if (spoofedProps.userAgent) {
+    replaceGetter('userAgent', spoofedProps.userAgent);
+  }
+  
   if (spoofedProps.language) {
     replaceGetter('language', spoofedProps.language);
     replaceGetter('languages', [spoofedProps.language, spoofedProps.language.split('-')[0]]);
@@ -319,6 +323,27 @@
   
   if (spoofedProps.vendor) {
     replaceGetter('vendor', spoofedProps.vendor);
+  }
+  
+  if (spoofedProps.appVersion) {
+    replaceGetter('appVersion', spoofedProps.appVersion);
+  }
+  
+  if (spoofedProps.productSub) {
+    replaceGetter('productSub', spoofedProps.productSub);
+  }
+  
+  if (spoofedProps.maxTouchPoints !== undefined && spoofedProps.maxTouchPoints !== null) {
+    replaceGetter('maxTouchPoints', spoofedProps.maxTouchPoints);
+  }
+  
+  if (spoofedProps.mobile !== undefined && spoofedProps.mobile !== null) {
+    replaceGetter('mobile', spoofedProps.mobile);
+  }
+  
+  if (spoofedProps.connection) {
+    const connectionObj = Object.freeze(Object.assign({}, spoofedProps.connection));
+    replaceGetter('connection', connectionObj);
   }
   
   console.log('[browser-profiles] Navigator spoofing enabled:', spoofedProps);

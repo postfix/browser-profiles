@@ -145,6 +145,130 @@ func QuickLaunch(opts QuickLaunchOptions) (*Session, error) {
 	return sess, nil
 }
 
+// brandsFromGenerated converts fingerprint.Brand slices to the root package's Brand type.
+func brandsFromGenerated(in []fingerprint.Brand) []Brand {
+	out := make([]Brand, len(in))
+	for i, b := range in {
+		out[i] = Brand{Brand: b.Brand, Version: b.Version}
+	}
+	return out
+}
+
+// brandsToFingerprint converts root-package Brand slices to fingerprint.Brand.
+func brandsToFingerprint(in []Brand) []fingerprint.Brand {
+	out := make([]fingerprint.Brand, len(in))
+	for i, b := range in {
+		out[i] = fingerprint.Brand{Brand: b.Brand, Version: b.Version}
+	}
+	return out
+}
+
+// capsFromGenerated maps a generated fingerprint WebGL caps block to the root
+// package's WebGLConfig.Caps type.
+func capsFromGenerated(c fingerprint.WebGLCaps) *WebGLCaps {
+	return &WebGLCaps{
+		MaxTextureSize:             c.MaxTextureSize,
+		MaxCubeMapTextureSize:      c.MaxCubeMapTextureSize,
+		MaxRenderbufferSize:        c.MaxRenderbufferSize,
+		MaxVaryingVectors:          c.MaxVaryingVectors,
+		MaxVertexUniformVectors:    c.MaxVertexUniformVectors,
+		MaxViewportDims:            []int{c.MaxViewportDims[0], c.MaxViewportDims[1]},
+		AliasedLineWidthRange:      []float64{c.AliasedLineWidthRange[0], c.AliasedLineWidthRange[1]},
+		AliasedPointSizeRange:      []float64{c.AliasedPointSizeRange[0], c.AliasedPointSizeRange[1]},
+		MaxTextureImageUnits:       c.MaxTextureImageUnits,
+		MaxVertexTextureImageUnits: c.MaxVertexTextureImageUnits,
+		MaxCombinedTextureImageUnits: c.MaxCombinedTextureImageUnits,
+		MaxFragmentUniformVectors:  c.MaxFragmentUniformVectors,
+		MaxVertexAttribs:           c.MaxVertexAttribs,
+	}
+}
+
+// clientHintsConfigFromFingerprint derives a fingerprint.ClientHintsScriptConfig from
+// the root-package FingerprintConfig. It returns nil when the profile carries no usable
+// client-hints data, preserving v1.0 default behavior.
+func clientHintsConfigFromFingerprint(fp *FingerprintConfig) *fingerprint.ClientHintsScriptConfig {
+	if fp == nil {
+		return nil
+	}
+	ch := fp.ClientHints
+	if ch == nil && fp.Platform == "" && fp.UserAgent == "" {
+		return nil
+	}
+	platform := ""
+	platformVersion := ""
+	architecture := ""
+	mobile := fp.Mobile
+	model := ""
+	var brands []Brand
+	fullVersion := ""
+	if ch != nil {
+		platform = ch.Platform
+		platformVersion = ch.PlatformVersion
+		architecture = ch.Architecture
+		mobile = ch.Mobile
+		model = ch.Model
+		brands = ch.Brands
+		fullVersion = ch.FullVersion
+	}
+	if platform == "" {
+		switch {
+		case strings.Contains(fp.Platform, "Win"):
+			platform = "Windows"
+		case strings.Contains(fp.Platform, "Mac"):
+			platform = "macOS"
+		case strings.Contains(fp.Platform, "Linux"):
+			platform = "Linux"
+		default:
+			platform = "Windows"
+		}
+	}
+	if platformVersion == "" {
+		switch platform {
+		case "Windows":
+			platformVersion = "10.0.0"
+		case "macOS":
+			platformVersion = "14.0.0"
+		case "Linux":
+			platformVersion = "6.5.0"
+		default:
+			platformVersion = "10.0.0"
+		}
+	}
+	if architecture == "" {
+		if platform == "macOS" {
+			architecture = "arm"
+		} else {
+			architecture = "x86"
+		}
+	}
+	if fullVersion == "" {
+		fullVersion = fingerprint.ParseChromeFullVersion(fp.UserAgent)
+	}
+	fbrands := brandsToFingerprint(brands)
+	if len(fbrands) == 0 {
+		major := "120"
+		if v := fingerprint.ParseChromeFullVersion(fp.UserAgent); v != "" {
+			if dot := strings.Index(v, "."); dot > 0 {
+				major = v[:dot]
+			}
+		}
+		fbrands = []fingerprint.Brand{
+			{Brand: "Chromium", Version: major},
+			{Brand: "Google Chrome", Version: major},
+			{Brand: "Not_A Brand", Version: "8"},
+		}
+	}
+	return &fingerprint.ClientHintsScriptConfig{
+		Platform:        platform,
+		PlatformVersion: platformVersion,
+		Architecture:    architecture,
+		Model:           model,
+		Mobile:          mobile,
+		Brands:          fbrands,
+		FullVersion:     fullVersion,
+	}
+}
+
 // CreateSession is a lightweight temporary session with a random fingerprint.
 //
 // [DIVERGENCE] Unlike the TS createSession (which builds its own puppeteer.launch
@@ -170,7 +294,21 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 			HardwareConcurrency: gen.HardwareConcurrency,
 			DeviceMemory:        gen.DeviceMemory,
 			Screen:              &ScreenConfig{Width: gen.Screen.Width, Height: gen.Screen.Height, DeviceScaleFactor: float64(gen.Screen.DevicePixelRatio)},
-			WebGL:               &WebGLConfig{Vendor: gen.WebGL.Vendor, Renderer: gen.WebGL.Renderer},
+			WebGL:               &WebGLConfig{Vendor: gen.WebGL.Vendor, Renderer: gen.WebGL.Renderer, Caps: capsFromGenerated(gen.WebGL.Caps)},
+			AppVersion:          gen.AppVersion,
+			ProductSub:          gen.ProductSub,
+			Vendor:              gen.Vendor,
+			MaxTouchPoints:      gen.MaxTouchPoints,
+			Mobile:              gen.Mobile,
+			Connection:          &NavigatorConnection{EffectiveType: gen.Connection.EffectiveType, Downlink: gen.Connection.Downlink, Rtt: gen.Connection.Rtt, SaveData: gen.Connection.SaveData},
+			ClientHints: &ClientHintsConfig{
+				Platform:        gen.ClientHints.Platform,
+				PlatformVersion: gen.ClientHints.PlatformVersion,
+				Architecture:    gen.ClientHints.Architecture,
+				Mobile:          gen.ClientHints.Mobile,
+				Brands:          brandsFromGenerated(gen.ClientHints.Brands),
+				FullVersion:     gen.ClientHints.FullVersion,
+			},
 		}
 	}
 	// Explicit fingerprint fields win over the generated/default values.
@@ -190,7 +328,45 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 		if o.DeviceMemory != 0 {
 			fpc.DeviceMemory = o.DeviceMemory
 		}
+		if o.AppVersion != "" {
+			fpc.AppVersion = o.AppVersion
+		}
+		if o.ProductSub != "" {
+			fpc.ProductSub = o.ProductSub
+		}
+		if o.Vendor != "" {
+			fpc.Vendor = o.Vendor
+		}
+		if o.MaxTouchPoints != 0 {
+			fpc.MaxTouchPoints = o.MaxTouchPoints
+		}
+		fpc.Mobile = o.Mobile
+		if o.Connection != nil {
+			fpc.Connection = o.Connection
+		}
+		if o.ClientHints != nil {
+			fpc.ClientHints = o.ClientHints
+		}
+		if o.WebGL != nil && o.WebGL.Caps != nil {
+			if fpc.WebGL == nil {
+				fpc.WebGL = &WebGLConfig{}
+			}
+			fpc.WebGL.Caps = o.WebGL.Caps
+		}
+		if o.WebGL != nil && o.WebGL.Vendor != "" {
+			if fpc.WebGL == nil {
+				fpc.WebGL = &WebGLConfig{}
+			}
+			fpc.WebGL.Vendor = o.WebGL.Vendor
+		}
+		if o.WebGL != nil && o.WebGL.Renderer != "" {
+			if fpc.WebGL == nil {
+				fpc.WebGL = &WebGLConfig{}
+			}
+			fpc.WebGL.Renderer = o.WebGL.Renderer
+		}
 	}
+
 
 	sessionID := fmt.Sprintf("session-%d-%s", time.Now().UnixMilli(), randHex(3))
 
@@ -247,6 +423,15 @@ func attachSession(ws string, profile *StoredProfile, lr *LaunchResult, launchCl
 		return nil, err
 	}
 
+	// Ensure the session page's user-agent + Sec-CH-UA* metadata is wired on this
+	// CDP connection (LaunchChrome may have used a different connection and, in
+	// the session-reuse path, may not have run applyAntiDetect at all).
+	if err := applyNetworkUserAgentOverride(page, profile); err != nil {
+		stop()
+		_ = browser.Close()
+		return nil, fmt.Errorf("apply network user agent override: %w", err)
+	}
+
 	closeFn := func() error {
 		stop()
 		_ = browser.Close()
@@ -300,6 +485,8 @@ func patchPageScript(opts PatchPageOptions) string {
 	language := ""
 	platform := "Win32"
 	hw, mem := 8, 8
+	var navCfg fingerprint.NavigatorConfig
+	var chCfg *fingerprint.ClientHintsScriptConfig
 	if fp := opts.Fingerprint; fp != nil {
 		language = fp.Language
 		if fp.Platform != "" {
@@ -311,6 +498,20 @@ func patchPageScript(opts PatchPageOptions) string {
 		if fp.DeviceMemory != 0 {
 			mem = fp.DeviceMemory
 		}
+		navCfg = fingerprint.NavigatorConfig{
+			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
+			UserAgent: fp.UserAgent, Vendor: fp.Vendor, AppVersion: fp.AppVersion, ProductSub: fp.ProductSub,
+			MaxTouchPoints: fp.MaxTouchPoints, Mobile: fp.Mobile,
+		}
+		if fp.Connection != nil {
+			navCfg.Connection = &fingerprint.NavigatorConnection{
+				EffectiveType: fp.Connection.EffectiveType,
+				Downlink:      fp.Connection.Downlink,
+				Rtt:           fp.Connection.Rtt,
+				SaveData:      fp.Connection.SaveData,
+			}
+		}
+		chCfg = clientHintsConfigFromFingerprint(fp)
 	}
 	if language == "" && len(opts.Languages) > 0 {
 		language = opts.Languages[0]
@@ -318,11 +519,24 @@ func patchPageScript(opts PatchPageOptions) string {
 	if language == "" {
 		language = "en-US"
 	}
+	if navCfg.Language == "" {
+		navCfg.Language = language
+	}
+	if navCfg.Platform == "" {
+		navCfg.Platform = platform
+	}
+	if navCfg.HardwareConcurrency == 0 {
+		navCfg.HardwareConcurrency = hw
+	}
+	if navCfg.DeviceMemory == 0 {
+		navCfg.DeviceMemory = mem
+	}
 
 	parts := []string{
-		fingerprint.CreateNavigatorScript(fingerprint.NavigatorConfig{
-			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
-		}),
+		fingerprint.CreateNavigatorScript(navCfg),
+	}
+	if chCfg != nil {
+		parts = append(parts, fingerprint.CreateClientHintsScript(*chCfg))
 	}
 	if webrtc {
 		parts = append(parts, fingerprint.CreateWebRTCProtectionScript(webrtcMode))
@@ -341,7 +555,9 @@ func protectionBundle(profile *StoredProfile) string {
 	platform := "Win32"
 	language := "en-US"
 	hw, mem := 8, 8
+	var navCfg fingerprint.NavigatorConfig
 	var webglCfg *fingerprint.WebGLScriptConfig
+	var chCfg *fingerprint.ClientHintsScriptConfig
 	webrtcMode, canvasMode, audioMode := "fake", "noise", "noise"
 	if profile != nil && profile.Fingerprint != nil {
 		fp := profile.Fingerprint
@@ -357,8 +573,38 @@ func protectionBundle(profile *StoredProfile) string {
 		if fp.DeviceMemory != 0 {
 			mem = fp.DeviceMemory
 		}
+		navCfg = fingerprint.NavigatorConfig{
+			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
+			UserAgent: fp.UserAgent, Vendor: fp.Vendor, AppVersion: fp.AppVersion, ProductSub: fp.ProductSub,
+			MaxTouchPoints: fp.MaxTouchPoints, Mobile: fp.Mobile,
+		}
+		if fp.Connection != nil {
+			navCfg.Connection = &fingerprint.NavigatorConnection{
+				EffectiveType: fp.Connection.EffectiveType,
+				Downlink:      fp.Connection.Downlink,
+				Rtt:           fp.Connection.Rtt,
+				SaveData:      fp.Connection.SaveData,
+			}
+		}
 		if fp.WebGL != nil {
 			webglCfg = &fingerprint.WebGLScriptConfig{Vendor: fp.WebGL.Vendor, Renderer: fp.WebGL.Renderer}
+			if fp.WebGL.Caps != nil {
+				webglCfg.Caps = &fingerprint.WebGLCaps{
+					MaxTextureSize:             fp.WebGL.Caps.MaxTextureSize,
+					MaxCubeMapTextureSize:      fp.WebGL.Caps.MaxCubeMapTextureSize,
+					MaxRenderbufferSize:        fp.WebGL.Caps.MaxRenderbufferSize,
+					MaxVaryingVectors:          fp.WebGL.Caps.MaxVaryingVectors,
+					MaxVertexUniformVectors:    fp.WebGL.Caps.MaxVertexUniformVectors,
+					MaxViewportDims:            [2]int{fp.WebGL.Caps.MaxViewportDims[0], fp.WebGL.Caps.MaxViewportDims[1]},
+					AliasedLineWidthRange:      [2]float64{fp.WebGL.Caps.AliasedLineWidthRange[0], fp.WebGL.Caps.AliasedLineWidthRange[1]},
+					AliasedPointSizeRange:      [2]float64{fp.WebGL.Caps.AliasedPointSizeRange[0], fp.WebGL.Caps.AliasedPointSizeRange[1]},
+					MaxTextureImageUnits:       fp.WebGL.Caps.MaxTextureImageUnits,
+					MaxVertexTextureImageUnits: fp.WebGL.Caps.MaxVertexTextureImageUnits,
+					MaxCombinedTextureImageUnits: fp.WebGL.Caps.MaxCombinedTextureImageUnits,
+					MaxFragmentUniformVectors:  fp.WebGL.Caps.MaxFragmentUniformVectors,
+					MaxVertexAttribs:           fp.WebGL.Caps.MaxVertexAttribs,
+				}
+			}
 		}
 		if fp.WebRTC != "" {
 			webrtcMode = fp.WebRTC
@@ -369,15 +615,15 @@ func protectionBundle(profile *StoredProfile) string {
 		if fp.Audio != "" {
 			audioMode = fp.Audio
 		}
+		chCfg = clientHintsConfigFromFingerprint(fp)
 	}
 	return fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
-		Navigator: &fingerprint.NavigatorConfig{
-			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
-		},
+		Navigator:   &navCfg,
 		WebGLConfig: webglCfg,
 		WebRTCMode:  webrtcMode,
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
+		ClientHints: chCfg,
 	})
 }
 
@@ -394,6 +640,7 @@ func installProtections(browser *rod.Browser, profile *StoredProfile) (func(), e
 	if pages, err := browser.Pages(); err == nil {
 		for _, p := range pages {
 			_, _ = p.EvalOnNewDocument(bundle)
+			_ = applyNetworkUserAgentOverride(p, profile)
 		}
 	}
 
@@ -414,6 +661,7 @@ func installProtections(browser *rod.Browser, profile *StoredProfile) (func(), e
 			return
 		}
 		_, _ = p.EvalOnNewDocument(bundle)
+		_ = applyNetworkUserAgentOverride(p, profile)
 	})
 	go wait()
 

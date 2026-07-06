@@ -109,13 +109,61 @@ func TestBuildersGolden(t *testing.T) {
 	fixedFp := GeneratedFingerprint{
 		UserAgent: "Mozilla/5.0 X", Platform: "Win32", Language: "en-US", Languages: []string{"en-US", "en"},
 		HardwareConcurrency: 8, DeviceMemory: 8, Vendor: "Google Inc. (ANGLE)",
+		AppVersion: "5.0 X", ProductSub: "20030107", MaxTouchPoints: 0, Mobile: false,
+		Connection:  NavigatorConnection{EffectiveType: "4g", Downlink: 10, Rtt: 50, SaveData: false},
 		Screen:      ScreenInfo{Width: 1920, Height: 1080, AvailWidth: 1920, AvailHeight: 1040, ColorDepth: 24, PixelDepth: 24, DevicePixelRatio: 1},
 		WebGL:       WebGLInfo{Vendor: "Google Inc. (ANGLE)", Renderer: "ANGLE (Intel)"},
-		ClientHints: ClientHintsInfo{Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Mobile: false, Brands: []Brand{{Brand: "Chromium", Version: "120"}}},
+		ClientHints: ClientHintsInfo{Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Mobile: false, Brands: []Brand{{Brand: "Chromium", Version: "120"}}, FullVersion: "120.0.0.0"},
 	}
 	assertEq(t, "fpscripts/sample",
 		GetFingerprintScripts(fixedFp),
 		readFixture(t, "fpscripts/sample.js"))
+
+	assertEq(t, "navigator/coherence",
+		CreateNavigatorScript(NavigatorConfig{
+			UserAgent:           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			Language:            "en-US",
+			Platform:            "Win32",
+			HardwareConcurrency: 8,
+			DeviceMemory:        8,
+			Vendor:              "Google Inc.",
+			AppVersion:          "(Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			ProductSub:          "20030107",
+			MaxTouchPoints:      0,
+			Mobile:              false,
+			Connection:          &NavigatorConnection{EffectiveType: "4g", Downlink: 10, Rtt: 50, SaveData: false},
+		}),
+		readFixture(t, "navigator/coherence.js"))
+
+	assertEq(t, "clienthints/full_version",
+		CreateClientHintsScript(ClientHintsScriptConfig{
+			Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Model: "", Mobile: false,
+			Brands:      []Brand{{Brand: "Chromium", Version: "120"}, {Brand: "Google Chrome", Version: "120"}, {Brand: "Not_A Brand", Version: "8"}},
+			FullVersion: "120.0.6099.130",
+		}),
+		readFixture(t, "clienthints/full_version.js"))
+
+	assertEq(t, "all/with_clienthints",
+		GetAllProtectionScripts(&AllProtectionOptions{
+			Navigator:   &NavigatorConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8},
+			ClientHints: &ClientHintsScriptConfig{Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Mobile: false, FullVersion: "120.0.6099.71"},
+		}),
+		readFixture(t, "all/with_clienthints.js"))
+
+	assertEq(t, "webgl/caps",
+		CreateWebGLScript(WebGLScriptConfig{
+			Vendor:   "Google Inc. (NVIDIA)",
+			Renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080)",
+			Caps: &WebGLCaps{
+				MaxTextureSize: 32768, MaxCubeMapTextureSize: 32768, MaxRenderbufferSize: 32768,
+				MaxVaryingVectors: 31, MaxVertexUniformVectors: 4096,
+				MaxViewportDims: [2]int{32768, 32768},
+				AliasedLineWidthRange: [2]float64{1, 1}, AliasedPointSizeRange: [2]float64{1, 2047},
+				MaxTextureImageUnits: 32, MaxVertexTextureImageUnits: 32, MaxCombinedTextureImageUnits: 192,
+				MaxFragmentUniformVectors: 1024, MaxVertexAttribs: 29,
+			},
+		}),
+		readFixture(t, "webgl/caps.js"))
 
 	// CreateWebGLScript: per-profile UNMASKED vendor/renderer are substituted into
 	// the template verbatim; the fixture IS the builder output, locking future drift.
