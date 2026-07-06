@@ -48,6 +48,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FingerprintConfig.CPUThrottlingRate` (off by default, applied once at launch via
   `Emulation.setCPUThrottlingRate`).
 
+### Security
+
+- **Fixed a JS-injection vulnerability in Client Hints spoofing (B-1, Phase 13.1).**
+  `CreateClientHintsScript` (`fingerprint/scripts.go`) substituted five profile-controlled
+  string fields (`Platform`, `PlatformVersion`, `Architecture`, `Model`, `FullVersion`) **raw**
+  into a manually single-quoted JS string literal. A single `'` in any of those fields —
+  reachable from arbitrary caller-supplied JSON via the public `profiles.go` `Import()` — let an
+  attacker break out of the literal and run arbitrary JavaScript in every page the profile
+  navigated to. Fixed by routing all five fields through the same `marshalNoEscape` JSON
+  encoding every other builder (`CreateWebGLScript`, `CreateNavigatorScript`) already used, so
+  no caller-controlled character can terminate the literal early. No default value or output
+  shape changed — only the byte-level quoting style (`'x'` → `"x"`). Also closes a related test-
+  coverage gap (M-1): added a dedicated escape fixture
+  (`fingerprint/testdata/clienthints/escape.js`) and a JS-runtime-independent regression test
+  (`TestClientHintsScriptNoInjection`) so this class of bug is caught going forward. See
+  `.planning/SECURITY-REVIEW-v1.1.md` (original finding) and
+  `.planning/SECURITY-REVIEW-v1.1-REVERIFY.md` (independent re-verification; verdict: passed).
+
 ### Notes
 
 - Self-contained detector-oracle coherence checks (`navigator_coherence`,
