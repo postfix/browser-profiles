@@ -160,3 +160,73 @@ func TestCLIDeleteForce(t *testing.T) {
 		t.Fatalf("after delete, list --json = %q, want []", got)
 	}
 }
+
+// TestCLIListNonEmpty verifies the human-readable table output for a non-empty store.
+func TestCLIListNonEmpty(t *testing.T) {
+	useTempProfiles(t)
+	out := runCLI(t, "create", "listed")
+	if !strings.Contains(out, "created") {
+		t.Fatalf("create output missing 'created':\n%s", out)
+	}
+
+	listOut := runCLI(t, "list")
+	if !strings.Contains(listOut, "listed") {
+		t.Fatalf("list output missing profile name:\n%s", listOut)
+	}
+	if !strings.Contains(listOut, "Total: 1") {
+		t.Fatalf("list output missing total:\n%s", listOut)
+	}
+}
+
+// TestCLIInfoNonJSON verifies the human-readable profile details output.
+func TestCLIInfoNonJSON(t *testing.T) {
+	useTempProfiles(t)
+	_ = runCLI(t, "create", "infohuman")
+	out := runCLI(t, "info", "infohuman")
+	for _, want := range []string{"Profile Details", "ID:", "Name:"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("info output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestCLIDeleteByName verifies deleting a profile by name with --force.
+func TestCLIDeleteByName(t *testing.T) {
+	useTempProfiles(t)
+	_ = runCLI(t, "create", "byname")
+	out := runCLI(t, "delete", "byname", "--force")
+	if !strings.Contains(out, "deleted") {
+		t.Fatalf("delete output missing 'deleted':\n%s", out)
+	}
+	if got := runCLI(t, "list", "--json"); got != "[]\n" {
+		t.Fatalf("after delete, list = %q, want []", got)
+	}
+}
+
+// TestCLICreateWithFlags verifies create flags are persisted into the profile.
+func TestCLICreateWithFlags(t *testing.T) {
+	useTempProfiles(t)
+	_ = runCLI(t, "create", "flagged",
+		"--platform", "MacIntel",
+		"--language", "ja-JP",
+		"--timezone", "Asia/Tokyo",
+	)
+	out := runCLI(t, "info", "flagged", "--json")
+	var prof map[string]any
+	if err := json.Unmarshal([]byte(out), &prof); err != nil {
+		t.Fatalf("info --json: %v\n%s", err, out)
+	}
+	if prof["timezone"] != "Asia/Tokyo" {
+		t.Fatalf("timezone = %v, want Asia/Tokyo", prof["timezone"])
+	}
+	fp, _ := prof["fingerprint"].(map[string]any)
+	if fp == nil {
+		t.Fatalf("fingerprint missing in %s", out)
+	}
+	if fp["platform"] != "MacIntel" {
+		t.Fatalf("platform = %v, want MacIntel", fp["platform"])
+	}
+	if fp["language"] != "ja-JP" {
+		t.Fatalf("language = %v, want ja-JP", fp["language"])
+	}
+}

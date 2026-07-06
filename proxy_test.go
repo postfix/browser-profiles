@@ -1,5 +1,8 @@
 package browserprofiles
 
+// All proxy integration tests use local httptest/fake servers; no external network is
+// required.
+
 import (
 	"bufio"
 	"crypto/tls"
@@ -10,7 +13,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 func hostPort(t *testing.T, addr string) (string, Port) {
@@ -265,5 +270,161 @@ func TestNewProxyBackendKinds(t *testing.T) {
 		t.Fatal(err)
 	} else if _, ok := be.(*httpBackend); !ok {
 		t.Fatalf("http → %T", be)
+	}
+}
+
+// TestForwardProxyHTTPPlainErrorDial: an upstream HTTP proxy that cannot be
+// reached causes the forward proxy to return 502 on a plain HTTP request.
+func TestForwardProxyHTTPPlainErrorDial(t *testing.T) {
+	// Find a closed local port without racing.
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := ln.Addr().String()
+	ln.Close()
+
+	h, p := hostPort(t, addr)
+	localURL, cleanup, err := resolveProxy(&ProxyConfig{Type: "http", Host: h, Port: p, Username: "u", Password: "p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	pu, _ := url.Parse(localURL)
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(pu)}}
+	resp, err := client.Get("http://example.test/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", resp.StatusCode)
+	}
+}
+
+// TestForwardProxyHTTPBackendConnectRejected: a CONNECT that returns 407 makes
+// httpBackend.dial return an error.
+func TestForwardProxyHTTPBackendConnectRejected(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				br := bufio.NewReader(c)
+				req, err := http.ReadRequest(br)
+				if err != nil || req.Method != http.MethodConnect {
+					return
+				}
+				_, _ = io.WriteString(c, "HTTP/1.1 407 Proxy Authentication Required\r\n\r\n")
+			}(c)
+		}
+	}()
+
+	h, p := hostPort(t, ln.Addr().String())
+	be := &httpBackend{addr: net.JoinHostPort(h, p.String()), cred: basicAuth("u", "p")}
+	if _, err := be.dial("example.test:443"); err == nil {
+		t.Fatal("expected dial error for 407 CONNECT")
+	}
+}
+
+// TestForwardProxySOCKS5Plain: a plain HTTP request (not CONNECT) is relayed
+// through the authenticated SOCKS5 upstream.
+func TestForwardProxySOCKS5Plain(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "SOCKS_PLAIN_OK")
+	}))
+	defer target.Close()
+
+	authSeen := false
+	ln := fakeSOCKS5(t, "user", "pass", &authSeen)
+	defer ln.Close()
+
+	h, p := hostPort(t, ln.Addr().String())
+	localURL, cleanup, err := resolveProxy(&ProxyConfig{Type: "socks5", Host: h, Port: p, Username: "user", Password: "pass"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	pu, _ := url.Parse(localURL)
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(pu)}}
+	resp, err := client.Get(target.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "SOCKS_PLAIN_OK" {
+		t.Fatalf("body = %q", body)
+	}
+	if !authSeen {
+		t.Fatal("SOCKS5 upstream did not see username/password auth")
+	}
+}
+
+// TestForwardProxyClose: Close is idempotent and safe to call twice.
+func TestForwardProxyClose(t *testing.T) {
+	p := &ProxyConfig{Type: "http", Host: "127.0.0.1", Port: 8080, Username: "u", Password: "p"}
+	fp, cleanup, err := resolveProxy(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanup == nil {
+		t.Fatal("expected forward proxy cleanup")
+	}
+	// Cleanup is idempotent by contract; calling it twice must not panic/error.
+	if err := cleanup(); err != nil {
+		t.Fatalf("first close: %v", err)
+	}
+	if err := cleanup(); err != nil {
+		t.Fatalf("second close: %v", err)
+	}
+	// Ensure the proxy URL was real enough to parse.
+	if _, err := url.Parse(fp); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestReadConnectStatusMalformed feeds a non-status line to readConnectStatus.
+func TestReadConnectStatusMalformed(t *testing.T) {
+	c1, c2 := net.Pipe()
+	go func() {
+		_, _ = io.WriteString(c2, "hello world\r\n\r\n")
+		c2.Close()
+	}()
+	if _, err := readConnectStatus(c1); err == nil {
+		t.Fatal("expected error for malformed CONNECT status")
+	}
+	c1.Close()
+}
+
+// TestSOCKS5BackendPlainError covers the socks5Backend.plain error branch when the
+// upstream target is unreachable.
+func TestSOCKS5BackendPlainError(t *testing.T) {
+	be, err := newProxyBackend(&ProxyConfig{Type: "socks5", Host: "127.0.0.1", Port: 1080})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+	br := bufio.NewReader(c1)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:1/", nil)
+	go func() {
+		be.plain(c2, br, req)
+	}()
+	// Wait briefly for the 502 response.
+	buf := make([]byte, 256)
+	c1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	defer c1.SetReadDeadline(time.Time{})
+	n, _ := c1.Read(buf)
+	if !strings.Contains(string(buf[:n]), "502") {
+		t.Fatalf("expected 502 response, got %q", string(buf[:n]))
 	}
 }

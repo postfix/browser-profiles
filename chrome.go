@@ -539,12 +539,18 @@ func parseWSPort(ws string) int {
 	return 0
 }
 
+// localtimeReadlink is a seam for testing systemTimezone. In production it reads
+// /etc/localtime; tests point it at a temp zoneinfo tree.
+var localtimeReadlink = func() (string, error) {
+	return os.Readlink("/etc/localtime")
+}
+
 // systemTimezone best-effort mirrors Intl.DateTimeFormat().resolvedOptions().timeZone.
 func systemTimezone() string {
 	if tz := os.Getenv("TZ"); tz != "" {
 		return tz
 	}
-	if p, err := os.Readlink("/etc/localtime"); err == nil {
+	if p, err := localtimeReadlink(); err == nil {
 		if i := strings.Index(p, "zoneinfo/"); i >= 0 {
 			return p[i+len("zoneinfo/"):]
 		}

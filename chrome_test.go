@@ -3,6 +3,7 @@ package browserprofiles
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -133,11 +134,180 @@ func TestParseWSPort(t *testing.T) {
 	}
 }
 
+// TestBuildLauncherOptions covers the optional branches: extra args, headless toggles,
+// and extension directories (with/without manifest.json). All assertions are browser-free.
+func TestBuildLauncherOptions(t *testing.T) {
+	profile := &StoredProfile{ProfileConfig: ProfileConfig{ID: "opt", Name: "opt"}}
+
+	t.Run("extra args", func(t *testing.T) {
+		l, err := buildLauncher(profile, t.TempDir(), LaunchOptions{
+			Headless:  true,
+			ChromePath: fakeChrome(t),
+			Args:      []string{"--disable-features=SomeFeature"},
+		}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(l.FormatArgs(), " "), "--disable-features=SomeFeature") {
+			t.Fatalf("extra arg missing from: %s", strings.Join(l.FormatArgs(), " "))
+		}
+	})
+
+	t.Run("headless true", func(t *testing.T) {
+		l, err := buildLauncher(profile, t.TempDir(), LaunchOptions{Headless: true, ChromePath: fakeChrome(t)}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Join(l.FormatArgs(), " ")
+		for _, want := range []string{"--headless=new", "--mute-audio", "--hide-scrollbars"} {
+			if !strings.Contains(args, want) {
+				t.Errorf("headless true missing %s", want)
+			}
+		}
+	})
+
+	t.Run("headless false no audio/scrollbars", func(t *testing.T) {
+		l, err := buildLauncher(profile, t.TempDir(), LaunchOptions{Headless: false, ChromePath: fakeChrome(t)}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Join(l.FormatArgs(), " ")
+		for _, forbid := range []string{"--headless", "--mute-audio", "--hide-scrollbars"} {
+			if strings.Contains(args, forbid) {
+				t.Errorf("headless false should not contain %s", forbid)
+			}
+		}
+	})
+
+	t.Run("extension with manifest", func(t *testing.T) {
+		dir := t.TempDir()
+		extDir := filepath.Join(dir, "ext")
+		_ = os.MkdirAll(extDir, 0o755)
+		_ = os.WriteFile(filepath.Join(extDir, "manifest.json"), []byte("{}"), 0o644)
+		l, err := buildLauncher(profile, t.TempDir(), LaunchOptions{Headless: false, ChromePath: fakeChrome(t), Extensions: []string{extDir}}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Join(l.FormatArgs(), " ")
+		if !strings.Contains(args, "--load-extension="+extDir) {
+			t.Errorf("load-extension missing from: %s", args)
+		}
+		if !strings.Contains(args, "--disable-extensions-except="+extDir) {
+			t.Errorf("disable-extensions-except missing from: %s", args)
+		}
+	})
+
+	t.Run("extension without manifest ignored", func(t *testing.T) {
+		dir := t.TempDir()
+		extDir := filepath.Join(dir, "ext")
+		_ = os.MkdirAll(extDir, 0o755)
+		l, err := buildLauncher(profile, t.TempDir(), LaunchOptions{Headless: false, ChromePath: fakeChrome(t), Extensions: []string{extDir}}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Join(l.FormatArgs(), " ")
+		if strings.Contains(args, "--load-extension") {
+			t.Errorf("extension without manifest should be ignored: %s", args)
+		}
+	})
+}
+
+func TestFirstNonEmpty(t *testing.T) {
+	if got := firstNonEmpty("a", "b"); got != "a" {
+		t.Fatalf("firstNonEmpty(a,b) = %q, want a", got)
+	}
+	if got := firstNonEmpty("", "b"); got != "b" {
+		t.Fatalf("firstNonEmpty(\"\",b) = %q, want b", got)
+	}
+}
+
+func TestParseWSPortInvalid(t *testing.T) {
+	if p := parseWSPort("not-a-url"); p != 0 {
+		t.Fatalf("parseWSPort(not-a-url) = %d, want 0", p)
+	}
+	if p := parseWSPort("ws://host:abc"); p != 0 {
+		t.Fatalf("parseWSPort(ws://host:abc) = %d, want 0", p)
+	}
+}
+
+func TestSystemTimezoneFromLocaltime(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("localtime symlink resolution is Linux-specific")
+	}
+	t.Setenv("TZ", "")
+	dir := t.TempDir()
+	zoneInfo := filepath.Join(dir, "zoneinfo")
+	if err := os.MkdirAll(zoneInfo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/localtime", filepath.Join(zoneInfo, "Europe", "Berlin")); err != nil {
+		// Berlin subdir may not exist; create it and retry.
+		if err := os.MkdirAll(filepath.Join(zoneInfo, "Europe"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("/etc/localtime", filepath.Join(zoneInfo, "Europe", "Berlin")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	orig := localtimeReadlink
+	localtimeReadlink = func() (string, error) {
+		return filepath.Join(zoneInfo, "Europe", "Berlin"), nil
+	}
+	t.Cleanup(func() { localtimeReadlink = orig })
+	if got := systemTimezone(); got != "Europe/Berlin" {
+		t.Fatalf("systemTimezone from localtime = %q, want Europe/Berlin", got)
+	}
+}
+
+func TestDirExists(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file")
+	_ = os.WriteFile(file, []byte("x"), 0o644)
+	if !dirExists(dir) {
+		t.Fatal("dirExists(dir) = false, want true")
+	}
+	if dirExists(file) {
+		t.Fatal("dirExists(file) = true, want false")
+	}
+	if dirExists(filepath.Join(dir, "missing")) {
+		t.Fatal("dirExists(missing) = true, want false")
+	}
+}
+
+func TestReadLockFileMalformed(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(lockFilePath(dir), []byte("not json"), 0o644)
+	if got := readLockFile(dir); got != nil {
+		t.Fatalf("readLockFile malformed = %+v, want nil", got)
+	}
+}
+
+func TestIsProcessRunningZeroOrMissing(t *testing.T) {
+	if isProcessRunning(0) {
+		t.Fatal("isProcessRunning(0) = true")
+	}
+	if isProcessRunning(-1) {
+		t.Fatal("isProcessRunning(-1) = true")
+	}
+}
+
+func TestTerminateProcessNoPanic(t *testing.T) {
+	terminateProcess(0) // should not panic
+}
+
+func TestGetChromePathEnv(t *testing.T) {
+	fc := fakeChrome(t)
+	t.Setenv("CHROME_PATH", fc)
+	got, err := GetChromePath("")
+	if err != nil || got != fc {
+		t.Fatalf("GetChromePath(env) = %q, %v, want %q", got, err, fc)
+	}
+}
+
 // TestLaunchRuntimeSmoke launches real headless Chrome and proves, at runtime, that
 // navigator.webdriver is false WITHOUT relying on the injected JS mask (the B1 concern),
 // and that the full CDP anti-detect sequence executes without error. Skips if no Chrome.
-func TestLaunchRuntimeSmoke(t *testing.T) {
-	if _, err := GetChromePath(""); err != nil {
+func TestLaunchRuntimeSmoke(t *testing.T) {	if _, err := GetChromePath(""); err != nil {
 		t.Skip("no Chrome/Chromium available")
 	}
 	bp := NewBrowserProfiles(BrowserProfilesOptions{StoragePath: t.TempDir()})

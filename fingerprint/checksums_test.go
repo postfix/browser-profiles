@@ -15,6 +15,11 @@ import (
 //  1. every pinned fixture still hashes to its recorded sha256, and
 //  2. the set of *.js fixtures on disk EXACTLY equals the pinned set
 //     (no fixture silently added or removed).
+//
+// Fixture-update discipline: any change to an anti-detect JavaScript string,
+// builder template, or embedded script constant must (1) regenerate the affected
+// testdata/*.js fixture, (2) update testdata/checksums.txt, and (3) be reviewed in
+// diff because it changes the browser-injected fingerprint.
 func TestGoldenFixtureChecksums(t *testing.T) {
 	const dir = "testdata"
 

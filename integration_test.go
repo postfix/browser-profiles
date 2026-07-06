@@ -465,3 +465,59 @@ func TestPatchPageInjectionOnExternalPage(t *testing.T) {
 		t.Fatalf("navigator.platform = %q, want FreeBSD-sentinel (PatchPage injection did not take effect)", plat)
 	}
 }
+
+// TestChromeSkipWhenMissing pins the graceful-skip contract: with CHROME_PATH and
+// CHROMIUM_PATH unset, GetChromePath returns an error and CreateSession returns a
+// skip-safe error rather than crashing the suite.
+func TestChromeSkipWhenMissing(t *testing.T) {
+	t.Setenv("CHROME_PATH", "")
+	t.Setenv("CHROMIUM_PATH", "")
+	if _, err := GetChromePath(""); err == nil {
+		t.Skip("Chrome was found via platform defaults; cannot test the missing-Chrome skip path")
+	}
+	_, err := CreateSession(CreateSessionOptions{})
+	if err == nil {
+		t.Fatal("CreateSession without Chrome should return an error")
+	}
+}
+
+// TestCrossContextInjection verifies that navigator.hardwareConcurrency is spoofed
+// inside a newly created iframe, not just the top-level page. Real Chrome required.
+func TestCrossContextInjection(t *testing.T) {
+	requireChrome(t)
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{StoragePath: t.TempDir()})
+	p, err := bp.Create(ProfileConfig{
+		ID:          "crossctx-01",
+		Name:        "crossctx",
+		Fingerprint: &FingerprintConfig{Platform: "Win32", Language: "en-US", HardwareConcurrency: 12, DeviceMemory: 8},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	sess, err := WithProfile(bp, p.ID, LaunchOptions{Headless: true})
+	if err != nil {
+		t.Fatalf("WithProfile: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Terminate() })
+
+	page := sess.Page
+	navigate(t, page)
+
+	// Create an iframe and read navigator.hardwareConcurrency inside it.
+	_, err = page.Eval(`() => {
+		const f = document.createElement('iframe');
+		f.id = 'probe';
+		document.body.appendChild(f);
+		return 'ok';
+	}`)
+	if err != nil {
+		t.Fatalf("create iframe: %v", err)
+	}
+	hw := evalInt(t, page, `() => document.getElementById('probe').contentWindow.navigator.hardwareConcurrency`)
+	if hw != 12 {
+		t.Fatalf("iframe hardwareConcurrency = %d, want 12", hw)
+	}
+}

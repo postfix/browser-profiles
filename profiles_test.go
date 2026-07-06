@@ -626,3 +626,174 @@ func TestExportImport(t *testing.T) {
 		t.Fatal("Import invalid json: expected error")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Group 7: Launch error paths (Chrome-free).
+// ---------------------------------------------------------------------------
+
+func TestLaunchByNameNotFound(t *testing.T) {
+	bp := newTestBP(t)
+	_, err := bp.LaunchByName("does-not-exist", LaunchOptions{})
+	if err == nil || !strings.Contains(err.Error(), "Profile not found: does-not-exist") {
+		t.Fatalf("LaunchByName missing: %v", err)
+	}
+}
+
+func TestLaunchByIdOrNameNotFound(t *testing.T) {
+	bp := newTestBP(t)
+	_, err := bp.LaunchByIdOrName("missing", LaunchOptions{})
+	if err == nil || !strings.Contains(err.Error(), "Profile not found: missing") {
+		t.Fatalf("LaunchByIdOrName missing: %v", err)
+	}
+}
+
+func TestLaunchMissingProfile(t *testing.T) {
+	bp := newTestBP(t)
+	_, err := bp.Launch("missing", LaunchOptions{})
+	if err == nil || !strings.Contains(err.Error(), "Profile not found: missing") {
+		t.Fatalf("Launch missing: %v", err)
+	}
+}
+
+func TestLaunchByNameSuccessSkipsWithoutChrome(t *testing.T) {
+	bp := newTestBP(t)
+	_, _ = bp.Create(ProfileConfig{Name: "exists"})
+	if _, err := GetChromePath(""); err != nil {
+		t.Skip("no Chrome available; skip the real-launch success path")
+	}
+	lr, err := bp.LaunchByName("exists", LaunchOptions{})
+	if err != nil {
+		t.Fatalf("LaunchByName success: %v", err)
+	}
+	_ = lr.Close()
+}
+
+// ---------------------------------------------------------------------------
+// Group 8: Group and update edge paths.
+// ---------------------------------------------------------------------------
+
+func TestCreateGroupDuplicate(t *testing.T) {
+	bp := newTestBP(t)
+	g1, err := bp.CreateGroup("same", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g2, err := bp.CreateGroup("same", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g1.ID == g2.ID {
+		t.Fatal("duplicate group names must still get different IDs")
+	}
+}
+
+func TestListGroupsEmpty(t *testing.T) {
+	bp := newTestBP(t)
+	groups, err := bp.ListGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 0 {
+		t.Fatalf("ListGroups empty = %d, want 0", len(groups))
+	}
+}
+
+func TestDeleteGroupMissing(t *testing.T) {
+	bp := newTestBP(t)
+	ok, err := bp.DeleteGroup("missing")
+	if err != nil || ok {
+		t.Fatalf("DeleteGroup missing = (%v, %v), want (false, nil)", ok, err)
+	}
+}
+
+func TestMoveToGroupMissing(t *testing.T) {
+	bp := newTestBP(t)
+	ok, err := bp.MoveToGroup("missing", "")
+	if err != nil || ok {
+		t.Fatalf("MoveToGroup missing = (%v, %v), want (false, nil)", ok, err)
+	}
+}
+
+func TestApplyUpdateClearNotes(t *testing.T) {
+	bp := newTestBP(t)
+	p, _ := bp.Create(ProfileConfig{Name: "notes", Notes: "original"})
+	empty := ""
+	bp.Update(p.ID, ProfileUpdate{Notes: &empty})
+	reloaded, _ := bp.Get(p.ID)
+	if reloaded == nil || reloaded.Notes != "" {
+		t.Fatalf("notes not cleared, got %q", reloaded.Notes)
+	}
+
+	// Non-pointer nil leaves notes untouched.
+	p2, _ := bp.Create(ProfileConfig{Name: "notes2", Notes: "keep"})
+	bp.Update(p2.ID, ProfileUpdate{})
+	reloaded2, _ := bp.Get(p2.ID)
+	if reloaded2 == nil || reloaded2.Notes != "keep" {
+		t.Fatalf("notes should be untouched, got %q", reloaded2.Notes)
+	}
+}
+
+func TestApplyUpdateEmptyStartUrls(t *testing.T) {
+	bp := newTestBP(t)
+	p, _ := bp.Create(ProfileConfig{Name: "urls"})
+	urls := []string{"https://a"}
+	bp.Update(p.ID, ProfileUpdate{StartURLs: &urls})
+	reloaded, _ := bp.Get(p.ID)
+	if reloaded == nil || len(reloaded.StartURLs) != 1 || reloaded.StartURLs[0] != "https://a" {
+		t.Fatalf("StartURLs not updated: %v", reloaded.StartURLs)
+	}
+}
+
+func TestApplyUpdateClearGroupIDAndTags(t *testing.T) {
+	bp := newTestBP(t)
+	p, _ := bp.Create(ProfileConfig{Name: "gtags", GroupID: "g1", Tags: []string{"t1"}})
+	empty := ""
+	newTags := []string{"t2"}
+	bp.Update(p.ID, ProfileUpdate{GroupID: &empty, Tags: &newTags})
+	reloaded, _ := bp.Get(p.ID)
+	if reloaded == nil || reloaded.GroupID != "" {
+		t.Fatalf("GroupID not cleared, got %q", reloaded.GroupID)
+	}
+	if len(reloaded.Tags) != 1 || reloaded.Tags[0] != "t2" {
+		t.Fatalf("Tags not updated: %v", reloaded.Tags)
+	}
+}
+
+func TestProfileDataPathInvalidID(t *testing.T) {
+	bp := newTestBP(t)
+	if got := bp.profileDataPath("../etc"); got != "" {
+		t.Fatalf("profileDataPath invalid = %q, want empty", got)
+	}
+}
+
+func TestLaunchOrchestrationClose(t *testing.T) {
+	bp := newTestBP(t)
+	if err := bp.Close("any-id"); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+	if err := bp.CloseAll(); err != nil {
+		t.Fatalf("CloseAll returned error: %v", err)
+	}
+}
+
+func TestListGroupsWithBadFiles(t *testing.T) {
+	bp := newTestBP(t)
+	g, _ := bp.CreateGroup("g", "")
+	// Write a non-JSON file into groups dir to cover the skip-invalid branch.
+	_ = os.WriteFile(filepath.Join(bp.groupsPath, "bad.json"), []byte("not json"), 0o644)
+	// Write a non-json file to exercise non-.json skip branch.
+	_ = os.WriteFile(filepath.Join(bp.groupsPath, "skip.txt"), []byte("x"), 0o644)
+	groups, err := bp.ListGroups()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, gg := range groups {
+		if gg.ID == g.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("valid group missing, got %+v", groups)
+	}
+}

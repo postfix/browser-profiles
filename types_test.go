@@ -2,6 +2,7 @@ package browserprofiles
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -24,6 +25,15 @@ func TestPortUnmarshalFromNumberAndString(t *testing.T) {
 	}
 	if fromStr.P != 3128 {
 		t.Fatalf("string: got %d want 3128", fromStr.P)
+	}
+}
+
+func TestPortUnmarshalInvalidString(t *testing.T) {
+	var v struct {
+		P Port `json:"p"`
+	}
+	if err := json.Unmarshal([]byte(`{"p":"abc"}`), &v); err == nil {
+		t.Fatal("want error for non-numeric port string, got nil")
 	}
 }
 
@@ -62,5 +72,20 @@ func TestStoredProfileRoundTrip(t *testing.T) {
 	}
 	if out.ID != in.ID || out.Name != in.Name || out.CreatedAt != in.CreatedAt || out.Proxy.Port != 1080 {
 		t.Fatalf("round-trip mismatch: %+v", out)
+	}
+}
+
+func TestBrowserErrorUnwrap(t *testing.T) {
+	cause := errors.New("root cause")
+	err := &BrowserError{Code: "ERR", Message: "msg", Cause: cause}
+	if !errors.Is(err, cause) {
+		t.Fatal("errors.Is(BrowserError, cause) = false, want true")
+	}
+}
+
+func TestBrowserErrorError(t *testing.T) {
+	err := &BrowserError{Code: "ERR", Message: "the message"}
+	if got := err.Error(); got != "the message" {
+		t.Fatalf("Error() = %q, want %q", got, "the message")
 	}
 }

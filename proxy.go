@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	xproxy "golang.org/x/net/proxy"
@@ -23,13 +24,21 @@ import (
 type forwardProxy struct {
 	ln       net.Listener
 	localURL string
+	closed   bool
+	mu       sync.Mutex
 }
 
-// Close stops the forward proxy.
+// Close stops the forward proxy. Idempotent: second call returns nil.
 func (f *forwardProxy) Close() error {
-	if f == nil || f.ln == nil {
+	if f == nil {
 		return nil
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closed || f.ln == nil {
+		return nil
+	}
+	f.closed = true
 	return f.ln.Close()
 }
 

@@ -138,3 +138,33 @@ func TestAutoDetectTimezoneNilProxy(t *testing.T) {
 		t.Fatalf("AutoDetectTimezone(nil) = %q, want America/New_York", got)
 	}
 }
+
+// TestAutoDetectTimezoneWithProxy mocks the geo-IP server and covers both success
+// and failure branches.
+func TestAutoDetectTimezoneWithProxy(t *testing.T) {
+	t.Run("success from proxy IP", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"status":"success","timezone":"Europe/Berlin"}`)
+		}))
+		defer srv.Close()
+		withGeoIPBase(t, srv.URL)
+
+		proxy := &ProxyConfig{Type: "http", Host: "1.2.3.4", Port: 8080}
+		if got := AutoDetectTimezone(proxy); got != "Europe/Berlin" {
+			t.Fatalf("AutoDetectTimezone = %q, want Europe/Berlin", got)
+		}
+	})
+
+	t.Run("geo-IP failure falls back to America/New_York", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"status":"fail"}`)
+		}))
+		defer srv.Close()
+		withGeoIPBase(t, srv.URL)
+
+		proxy := &ProxyConfig{Type: "http", Host: "1.2.3.4", Port: 8080}
+		if got := AutoDetectTimezone(proxy); got != "America/New_York" {
+			t.Fatalf("AutoDetectTimezone fallback = %q, want America/New_York", got)
+		}
+	})
+}
