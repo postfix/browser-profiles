@@ -257,6 +257,9 @@ func componentsContain(raw json.RawMessage, sub string) bool {
 //     proven either via ThumbmarkJS components (preferred) or, when ThumbmarkJS reads
 //     the masked RENDERER, via a direct getParameter(UNMASKED_RENDERER_WEBGL) read.
 func TestThumbmarkOracleObservesFingerprint(t *testing.T) {
+	status, note, value := "skipped", "Chrome unavailable or test skipped", ""
+	defer func() { recordDetectorResult("thumbmarkjs", status, note, value) }()
+
 	requireChrome(t)
 	t.Cleanup(func() { CloseAllBrowsers() })
 
@@ -356,4 +359,8 @@ func TestThumbmarkOracleObservesFingerprint(t *testing.T) {
 		t.Logf("direct UNMASKED per-profile identity VERIFIED: A renderer=%q vendor=%q; B renderer=%q vendor=%q",
 			obsA.directUnmaskedRenderer, obsA.directUnmaskedVendor, obsB.directUnmaskedRenderer, obsB.directUnmaskedVendor)
 	}
+	status = "passed"
+	note = "ThumbmarkJS observed distinct per-profile fingerprints"
+	value = resA.Hash + " / " + resB.Hash
+	t.Logf("ThumbmarkJS baseline recorded: A=%s B=%s", resA.Hash, resB.Hash)
 }

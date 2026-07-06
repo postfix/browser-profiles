@@ -1,0 +1,15 @@
+{
+  "browserleaks": {
+    "status": "skipped",
+    "note": "BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1"
+  },
+  "creepjs": {
+    "status": "skipped",
+    "note": "BROWSER_PROFILES_RUN_NETWORK_ORACLES is not set to 1"
+  },
+  "thumbmarkjs": {
+    "status": "passed",
+    "note": "ThumbmarkJS observed distinct per-profile fingerprints",
+    "value": "c1cd7e6b5573ef294830689fff95bb72 / 331c4b91c0ec40147a73f42a7582d210"
+  }
+}
