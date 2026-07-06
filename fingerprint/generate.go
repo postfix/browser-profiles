@@ -135,6 +135,9 @@ type GeneratedFingerprint struct {
 	Screen              ScreenInfo      `json:"screen"`
 	WebGL               WebGLInfo       `json:"webgl"`
 	ClientHints         ClientHintsInfo `json:"clientHints"`
+	WebRTC              string          `json:"webrtc"` // "disable" | "fake" | "real"
+	Canvas              string          `json:"canvas"` // "noise" | "real"
+	Audio               string          `json:"audio"`  // "noise" | "real"
 	Meta                FingerprintMeta `json:"meta"`
 }
 

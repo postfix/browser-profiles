@@ -28,10 +28,17 @@ func mustRead(name string) string {
 
 // Protection scripts (browser-injected JS), byte-identical to the TS constants.
 var (
-	WebRTCProtectionScript = mustRead("webrtc.js")
-	CanvasProtectionScript = mustRead("canvas.js")
+	WebRTCProtectionScript        = mustRead("webrtc-fake.js") // default = fake
+	WebRTCProtectionDisableScript = mustRead("webrtc-disable.js")
+	WebRTCProtectionRealScript    = mustRead("webrtc-real.js") // intentionally empty
+
+	CanvasProtectionScript     = mustRead("canvas-noise.js") // default = noise
+	CanvasProtectionRealScript = mustRead("canvas-real.js")  // intentionally empty
+
+	AudioProtectionScript     = mustRead("audio-noise.js") // default = noise
+	AudioProtectionRealScript = mustRead("audio-real.js")  // intentionally empty
+
 	WebGLProtectionScript  = mustRead("webgl.js")
-	AudioProtectionScript  = mustRead("audio.js")
 	AutomationBypassScript = mustRead("automation_bypass.js")
 	navigatorTmpl          = mustRead("navigator.tmpl.js")
 	screenTmpl             = mustRead("screen.tmpl.js")
@@ -199,13 +206,70 @@ func CreateWebGLScript(c WebGLScriptConfig) string {
 	return strings.ReplaceAll(s, "%%WEBGL_RENDERER%%", renderer)
 }
 
+// normalizeMode trims and lowercases a mode string. Empty input returns the default.
+// Unrecognized values are returned as-is and must be validated by the caller.
+func normalizeMode(mode, defaultMode string) string {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	if m == "" {
+		return defaultMode
+	}
+	return m
+}
+
+// CreateWebRTCProtectionScript returns the script for the requested WebRTC mode:
+//   "disable"  -> neutralize RTCPeerConnection
+//   "fake"     -> filter host/srflx candidates (v1.0 default)
+//   "real"     -> empty string (no protection)
+//   ""/unknown -> fall back to "fake".
+func CreateWebRTCProtectionScript(mode string) string {
+	switch normalizeMode(mode, "fake") {
+	case "disable":
+		return WebRTCProtectionDisableScript
+	case "real":
+		return WebRTCProtectionRealScript // empty
+	default:
+		return WebRTCProtectionScript
+	}
+}
+
+// CreateCanvasProtectionScript returns the script for the requested Canvas mode:
+//   "noise"    -> noisify getImageData/toBlob/toDataURL (v1.0 default)
+//   "real"     -> empty string (no protection)
+//   ""/unknown -> fall back to "noise".
+func CreateCanvasProtectionScript(mode string) string {
+	switch normalizeMode(mode, "noise") {
+	case "real":
+		return CanvasProtectionRealScript // empty
+	default:
+		return CanvasProtectionScript
+	}
+}
+
+// CreateAudioProtectionScript returns the script for the requested Audio mode:
+//   "noise"    -> add noise to AudioBuffer/AnalyserNode (v1.0 default)
+//   "real"     -> empty string (no protection)
+//   ""/unknown -> fall back to "noise".
+func CreateAudioProtectionScript(mode string) string {
+	switch normalizeMode(mode, "noise") {
+	case "real":
+		return AudioProtectionRealScript // empty
+	default:
+		return AudioProtectionScript
+	}
+}
+
 // AllProtectionOptions mirrors the TS getAllProtectionScripts options. A nil *bool
-// means "enabled" (TS defaults every protection to true).
+// means "enabled" (TS defaults every protection to true). The WebRTCMode, CanvasMode
+// and AudioMode fields select the protection variant; they are ignored when the
+// corresponding *bool toggle is explicitly false.
 type AllProtectionOptions struct {
 	WebRTC      *bool
 	Canvas      *bool
 	WebGL       *bool
 	Audio       *bool
+	WebRTCMode  string
+	CanvasMode  string
+	AudioMode   string
 	Navigator   *NavigatorConfig
 	WebGLConfig *WebGLScriptConfig // per-profile UNMASKED vendor/renderer; nil ⇒ verbatim webgl.js
 }
@@ -219,10 +283,14 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 	}
 	var scripts []string
 	if enabled(o.WebRTC) {
-		scripts = append(scripts, WebRTCProtectionScript)
+		if s := CreateWebRTCProtectionScript(o.WebRTCMode); s != "" {
+			scripts = append(scripts, s)
+		}
 	}
 	if enabled(o.Canvas) {
-		scripts = append(scripts, CanvasProtectionScript)
+		if s := CreateCanvasProtectionScript(o.CanvasMode); s != "" {
+			scripts = append(scripts, s)
+		}
 	}
 	if enabled(o.WebGL) {
 		if o.WebGLConfig != nil && (o.WebGLConfig.Vendor != "" || o.WebGLConfig.Renderer != "") {
@@ -232,7 +300,9 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 		}
 	}
 	if enabled(o.Audio) {
-		scripts = append(scripts, AudioProtectionScript)
+		if s := CreateAudioProtectionScript(o.AudioMode); s != "" {
+			scripts = append(scripts, s)
+		}
 	}
 	if o.Navigator != nil {
 		scripts = append(scripts, CreateNavigatorScript(*o.Navigator))
@@ -243,7 +313,9 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 }
 
 // GetFingerprintScripts ports getFingerprintScripts (navigator, screen, client-hints,
-// then all protection scripts + automation bypass).
+// then all protection scripts + automation bypass). The WebRTC/Canvas/Audio mode fields
+// on the generated fingerprint select which variant is injected; empty values fall back
+// to the v1.0 defaults.
 func GetFingerprintScripts(fp GeneratedFingerprint) string {
 	scripts := []string{
 		CreateNavigatorScript(NavigatorConfig{
@@ -269,11 +341,17 @@ func GetFingerprintScripts(fp GeneratedFingerprint) string {
 			Mobile:          fp.ClientHints.Mobile,
 			Brands:          fp.ClientHints.Brands,
 		}),
-		WebRTCProtectionScript,
-		CanvasProtectionScript,
-		WebGLProtectionScript,
-		AudioProtectionScript,
-		AutomationBypassScript,
 	}
+	if s := CreateWebRTCProtectionScript(fp.WebRTC); s != "" {
+		scripts = append(scripts, s)
+	}
+	if s := CreateCanvasProtectionScript(fp.Canvas); s != "" {
+		scripts = append(scripts, s)
+	}
+	scripts = append(scripts, WebGLProtectionScript)
+	if s := CreateAudioProtectionScript(fp.Audio); s != "" {
+		scripts = append(scripts, s)
+	}
+	scripts = append(scripts, AutomationBypassScript)
 	return strings.Join(scripts, "\n\n")
 }
