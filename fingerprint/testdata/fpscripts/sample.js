@@ -406,6 +406,162 @@
 })();
 
 
+(function() {
+  const originalQuery = navigator.permissions && navigator.permissions.query ?
+    navigator.permissions.query.bind(navigator.permissions) : null;
+  const config = {};
+
+  function normalizeDescriptor(parameters) {
+    if (typeof parameters === 'string') {
+      return parameters;
+    }
+    if (parameters && typeof parameters === 'object' && parameters.name) {
+      return parameters.name;
+    }
+    return '';
+  }
+
+  function createPermissionState(state) {
+    return {
+      state: state,
+      onchange: null,
+      addEventListener: function() {},
+      removeEventListener: function() {},
+      dispatchEvent: function() {}
+    };
+  }
+
+  navigator.permissions.query = function(parameters) {
+    const name = normalizeDescriptor(parameters);
+    if (config.hasOwnProperty(name)) {
+      return Promise.resolve(createPermissionState(config[name]));
+    }
+    if (originalQuery) {
+      return originalQuery(parameters);
+    }
+    return Promise.resolve(createPermissionState('prompt'));
+  };
+
+  console.log('[browser-profiles] Permissions spoofing enabled');
+})();
+
+
+(function() {
+  const pluginData = null;
+  const mimeData = null;
+
+  function makeMimeType(m) {
+    return {
+      type: m.type,
+      description: m.description,
+      suffixes: m.suffixes,
+      enabledPlugin: null
+    };
+  }
+
+  const plugins = pluginData.map(function(p) {
+    const mimeTypes = (p.mimeTypes || []).map(makeMimeType);
+    const plugin = {
+      name: p.name,
+      filename: p.filename,
+      description: p.description,
+      version: p.version,
+      length: mimeTypes.length,
+      item: function(idx) { return mimeTypes[idx] || null; },
+      namedItem: function(name) { return mimeTypes.find(function(x) { return x.type === name; }) || null; }
+    };
+    mimeTypes.forEach(function(m, i) {
+      plugin[i] = m;
+      m.enabledPlugin = plugin;
+    });
+    return plugin;
+  });
+  plugins.length = pluginData.length;
+  plugins.item = function(idx) { return plugins[idx] || null; };
+  plugins.namedItem = function(name) { return plugins.find(function(x) { return x.name === name; }) || null; };
+  plugins.refresh = function() {};
+
+  const allMimeTypes = mimeData.map(function(m) {
+    const mt = makeMimeType(m);
+    const plugin = plugins.find(function(p) { return p.name === (m.enabledPlugin || ''); });
+    mt.enabledPlugin = plugin || null;
+    return mt;
+  });
+  allMimeTypes.length = mimeData.length;
+  allMimeTypes.item = function(idx) { return allMimeTypes[idx] || null; };
+  allMimeTypes.namedItem = function(name) { return allMimeTypes.find(function(x) { return x.type === name; }) || null; };
+
+  const pluginArray = new Proxy(plugins, {
+    get: function(target, prop) {
+      if (prop === 'length') return target.length;
+      if (prop === 'item') return target.item;
+      if (prop === 'namedItem') return target.namedItem;
+      if (prop === 'refresh') return target.refresh;
+      if (typeof prop === 'symbol') return target[prop];
+      const idx = parseInt(prop, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < target.length) return target[idx];
+      return target.find(function(x) { return x.name === prop; }) || target[prop];
+    }
+  });
+
+  const mimeTypeArray = new Proxy(allMimeTypes, {
+    get: function(target, prop) {
+      if (prop === 'length') return target.length;
+      if (prop === 'item') return target.item;
+      if (prop === 'namedItem') return target.namedItem;
+      if (typeof prop === 'symbol') return target[prop];
+      const idx = parseInt(prop, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < target.length) return target[idx];
+      return target.find(function(x) { return x.type === prop; }) || target[prop];
+    }
+  });
+
+  Object.defineProperty(navigator, 'plugins', {
+    get: function() { return pluginArray; },
+    configurable: true
+  });
+  Object.defineProperty(navigator, 'mimeTypes', {
+    get: function() { return mimeTypeArray; },
+    configurable: true
+  });
+
+  console.log('[browser-profiles] Plugins spoofing enabled');
+})();
+
+
+(function() {
+  const realCheck = document.fonts && document.fonts.check ?
+    document.fonts.check.bind(document.fonts) : null;
+  const whitelist = null;
+  const whitelistSet = new Set(whitelist.map(function(f) { return f.toLowerCase(); }));
+
+  function parseFamilies(fonts) {
+    if (typeof fonts !== 'string') return [];
+    return fonts.split(',').map(function(f) {
+      const s = f.trim();
+      const idx = s.lastIndexOf(' ');
+      const name = idx > 0 ? s.slice(idx + 1) : s;
+      return name.replace(/^["']|["']$/g, '').trim().toLowerCase();
+    }).filter(Boolean);
+  }
+
+  document.fonts.check = function(fonts, text) {
+    const families = parseFamilies(fonts);
+    if (whitelistSet.size === 0 || families.length === 0) {
+      return realCheck ? realCheck.apply(document.fonts, arguments) : false;
+    }
+    for (let i = 0; i < families.length; i++) {
+      if (whitelistSet.has(families[i])) {
+        return true;
+      }
+    }
+    return realCheck ? realCheck.apply(document.fonts, arguments) : false;
+  };
+
+  console.log('[browser-profiles] Fonts guard enabled');
+})();
+
+
 
 (function() {
   // ===== CDP BINDING DETECTION EVASION =====
@@ -536,37 +692,6 @@
   };
   window.Error.prototype = originalError.prototype;
   
-  // ===== PERMISSIONS API =====
-  const originalQuery = navigator.permissions && navigator.permissions.query ? 
-    navigator.permissions.query.bind(navigator.permissions) : null;
-  
-  if (navigator.permissions) {
-    navigator.permissions.query = function(parameters) {
-      if (parameters.name === 'notifications') {
-        return Promise.resolve({ state: Notification.permission, onchange: null });
-      }
-      return originalQuery ? originalQuery(parameters) : Promise.resolve({ state: 'prompt', onchange: null });
-    };
-  }
-  
-  // ===== PLUGINS FIX =====
-  const fakePlugins = [
-    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 },
-    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1 },
-    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 1 },
-    { name: 'Chromium PDF Plugin', filename: 'internal-pdf-viewer', description: '', length: 1 },
-    { name: 'Microsoft Edge PDF Plugin', filename: 'edge-pdf-viewer', description: 'PDF', length: 1 }
-  ];
-  fakePlugins.item = (i) => fakePlugins[i];
-  fakePlugins.namedItem = (name) => fakePlugins.find(p => p.name === name);
-  fakePlugins.refresh = () => {};
-  
-  Object.defineProperty(navigator, 'plugins', {
-    get: () => fakePlugins,
-    configurable: true
-  });
-  
-  // ===== LANGUAGES FIX =====
   Object.defineProperty(navigator, 'languages', {
     get: () => ['en-US', 'en'],
     configurable: true

@@ -284,37 +284,6 @@
   };
   window.Error.prototype = originalError.prototype;
   
-  // ===== PERMISSIONS API =====
-  const originalQuery = navigator.permissions && navigator.permissions.query ? 
-    navigator.permissions.query.bind(navigator.permissions) : null;
-  
-  if (navigator.permissions) {
-    navigator.permissions.query = function(parameters) {
-      if (parameters.name === 'notifications') {
-        return Promise.resolve({ state: Notification.permission, onchange: null });
-      }
-      return originalQuery ? originalQuery(parameters) : Promise.resolve({ state: 'prompt', onchange: null });
-    };
-  }
-  
-  // ===== PLUGINS FIX =====
-  const fakePlugins = [
-    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 },
-    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1 },
-    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 1 },
-    { name: 'Chromium PDF Plugin', filename: 'internal-pdf-viewer', description: '', length: 1 },
-    { name: 'Microsoft Edge PDF Plugin', filename: 'edge-pdf-viewer', description: 'PDF', length: 1 }
-  ];
-  fakePlugins.item = (i) => fakePlugins[i];
-  fakePlugins.namedItem = (name) => fakePlugins.find(p => p.name === name);
-  fakePlugins.refresh = () => {};
-  
-  Object.defineProperty(navigator, 'plugins', {
-    get: () => fakePlugins,
-    configurable: true
-  });
-  
-  // ===== LANGUAGES FIX =====
   Object.defineProperty(navigator, 'languages', {
     get: () => ['en-US', 'en'],
     configurable: true

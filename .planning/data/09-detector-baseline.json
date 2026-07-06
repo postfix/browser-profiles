@@ -12,9 +12,14 @@
     "note": "navigator coherence self-check passed",
     "value": "no contradictions"
   },
+  "permissions_plugins_fonts_coherence": {
+    "status": "passed",
+    "note": "permissions/plugins/fonts coherence self-check passed",
+    "value": "platform/plugins/fonts coherent"
+  },
   "thumbmarkjs": {
     "status": "passed",
     "note": "ThumbmarkJS observed distinct per-profile fingerprints",
-    "value": "0f361f50e410fb1372b3dce1ffc551af / f0866360eca4d7da9428472ba4a2f412"
+    "value": "5c54af3dd4044ab6ba871b390064df6f / bbb206c09c873493f2023947720c130f"
   }
 }

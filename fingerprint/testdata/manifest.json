@@ -17,7 +17,7 @@
         "hardwareConcurrency": 8,
         "deviceMemory": 8
       },
-      "len": 2007
+      "len": 2102
     },
     {
       "dir": "navigator",
@@ -31,14 +31,14 @@
         "deviceMemory": 16,
         "vendor": "Google Inc."
       },
-      "len": 2075
+      "len": 2170
     },
     {
       "dir": "navigator",
       "name": "empty",
       "fn": "createNavigatorScript",
       "input": {},
-      "len": 1929
+      "len": 2024
     },
     {
       "dir": "navigator",
@@ -62,7 +62,7 @@
           "saveData": false
         }
       },
-      "len": 2252
+      "len": 2347
     },
     {
       "dir": "screen",
@@ -87,7 +87,7 @@
       "name": "default",
       "fn": "createClientHintsScript",
       "input": {},
-      "len": 1369
+      "len": 1324
     },
     {
       "dir": "clienthints",
@@ -111,7 +111,7 @@
         ],
         "fullVersion": "120.0.6099.71"
       },
-      "len": 1209
+      "len": 1164
     },
     {
       "dir": "clienthints",
@@ -139,14 +139,14 @@
         ],
         "fullVersion": "120.0.6099.130"
       },
-      "len": 1370
+      "len": 1325
     },
     {
       "dir": "all",
       "name": "default",
       "fn": "getAllProtectionScripts",
       "input": {},
-      "len": 17533
+      "len": 16119
     },
     {
       "dir": "all",
@@ -160,7 +160,7 @@
           "deviceMemory": 8
         }
       },
-      "len": 19542
+      "len": 18223
     },
     {
       "dir": "all",
@@ -172,7 +172,7 @@
         "webgl": true,
         "audio": false
       },
-      "len": 13638
+      "len": 12224
     },
     {
       "dir": "all",
@@ -183,7 +183,7 @@
         "canvasMode": "real",
         "audioMode": "noise"
       },
-      "len": 13194
+      "len": 11780
     },
     {
       "dir": "all",
@@ -197,7 +197,7 @@
           "deviceMemory": 32
         }
       },
-      "len": 19545
+      "len": 18226
     },
     {
       "dir": "all",
@@ -218,7 +218,7 @@
           "fullVersion": "120.0.6099.71"
         }
       },
-      "len": 20913
+      "len": 19549
     },
     {
       "dir": "fpscripts",
@@ -273,7 +273,7 @@
           "fullVersion": "120.0.0.0"
         }
       },
-      "len": 21676
+      "len": 25393
     },
     {
       "dir": "webgl",
@@ -308,9 +308,18 @@
           "maxRenderbufferSize": 32768,
           "maxVaryingVectors": 31,
           "maxVertexUniformVectors": 4096,
-          "maxViewportDims": [32768, 32768],
-          "aliasedLineWidthRange": [1, 1],
-          "aliasedPointSizeRange": [1, 2047],
+          "maxViewportDims": [
+            32768,
+            32768
+          ],
+          "aliasedLineWidthRange": [
+            1,
+            1
+          ],
+          "aliasedPointSizeRange": [
+            1,
+            2047
+          ],
           "maxTextureImageUnits": 32,
           "maxVertexTextureImageUnits": 32,
           "maxCombinedTextureImageUnits": 192,
@@ -319,6 +328,228 @@
         }
       },
       "len": 4069
+    },
+    {
+      "dir": "permissions",
+      "name": "default",
+      "fn": "createPermissionsScript",
+      "input": {
+        "camera": "prompt",
+        "microphone": "prompt",
+        "geolocation": "prompt",
+        "notifications": "default"
+      },
+      "len": 1172
+    },
+    {
+      "dir": "permissions",
+      "name": "full",
+      "fn": "createPermissionsScript",
+      "input": {
+        "camera": "denied",
+        "microphone": "denied",
+        "geolocation": "granted",
+        "notifications": "prompt"
+      },
+      "len": 1172
+    },
+    {
+      "dir": "plugins",
+      "name": "win",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "windows"
+      },
+      "len": 4165
+    },
+    {
+      "dir": "plugins",
+      "name": "mac",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "macos"
+      },
+      "len": 3718
+    },
+    {
+      "dir": "plugins",
+      "name": "linux",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "linux"
+      },
+      "len": 3718
+    },
+    {
+      "dir": "fonts",
+      "name": "win",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "windows"
+      },
+      "len": 1328
+    },
+    {
+      "dir": "fonts",
+      "name": "mac",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "macos"
+      },
+      "len": 1271
+    },
+    {
+      "dir": "fonts",
+      "name": "linux",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "linux"
+      },
+      "len": 1281
+    },
+    {
+      "dir": "all",
+      "name": "with_permissions_plugins_fonts",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "en-US",
+          "platform": "Win32",
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8
+        },
+        "clientHints": {
+          "platform": "Windows",
+          "platformVersion": "10.0.0",
+          "architecture": "x86",
+          "mobile": false,
+          "fullVersion": "120.0.6099.71"
+        },
+        "permissions": {
+          "camera": "prompt",
+          "microphone": "prompt",
+          "geolocation": "prompt",
+          "notifications": "default"
+        },
+        "plugins": {
+          "platformKey": "windows"
+        },
+        "fonts": {
+          "platformKey": "windows"
+        }
+      },
+      "len": 26220
+    },
+    {
+      "dir": "permissions",
+      "name": "default",
+      "fn": "createPermissionsScript",
+      "input": {
+        "camera": "prompt",
+        "microphone": "prompt",
+        "geolocation": "prompt",
+        "notifications": "default"
+      },
+      "len": 1172
+    },
+    {
+      "dir": "permissions",
+      "name": "full",
+      "fn": "createPermissionsScript",
+      "input": {
+        "camera": "denied",
+        "microphone": "denied",
+        "geolocation": "granted",
+        "notifications": "prompt"
+      },
+      "len": 1172
+    },
+    {
+      "dir": "plugins",
+      "name": "win",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "windows"
+      },
+      "len": 4165
+    },
+    {
+      "dir": "plugins",
+      "name": "mac",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "macos"
+      },
+      "len": 3718
+    },
+    {
+      "dir": "plugins",
+      "name": "linux",
+      "fn": "createPluginsScript",
+      "input": {
+        "platformKey": "linux"
+      },
+      "len": 3718
+    },
+    {
+      "dir": "fonts",
+      "name": "win",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "windows"
+      },
+      "len": 1328
+    },
+    {
+      "dir": "fonts",
+      "name": "mac",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "macos"
+      },
+      "len": 1271
+    },
+    {
+      "dir": "fonts",
+      "name": "linux",
+      "fn": "createFontsScript",
+      "input": {
+        "platformKey": "linux"
+      },
+      "len": 1281
+    },
+    {
+      "dir": "all",
+      "name": "with_permissions_plugins_fonts",
+      "fn": "getAllProtectionScripts",
+      "input": {
+        "navigator": {
+          "language": "en-US",
+          "platform": "Win32",
+          "hardwareConcurrency": 8,
+          "deviceMemory": 8
+        },
+        "clientHints": {
+          "platform": "Windows",
+          "platformVersion": "10.0.0",
+          "architecture": "x86",
+          "mobile": false,
+          "fullVersion": "120.0.6099.71"
+        },
+        "permissions": {
+          "camera": "prompt",
+          "microphone": "prompt",
+          "geolocation": "prompt",
+          "notifications": "default"
+        },
+        "plugins": {
+          "platformKey": "windows"
+        },
+        "fonts": {
+          "platformKey": "windows"
+        }
+      },
+      "len": 26220
     }
   ]
 }

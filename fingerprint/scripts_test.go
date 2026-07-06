@@ -176,6 +176,47 @@ func TestBuildersGolden(t *testing.T) {
 	assertEq(t, "webgl/escape",
 		CreateWebGLScript(WebGLScriptConfig{Vendor: `Ac<me>&"Co"`, Renderer: `GPU <x> & "y" \z/`}),
 		readFixture(t, "webgl/escape.js"))
+
+	// Permissions builder fixtures.
+	assertEq(t, "permissions/default",
+		CreatePermissionsScript(DefaultPermissionsConfig("windows")),
+		readFixture(t, "permissions/default.js"))
+	assertEq(t, "permissions/full",
+		CreatePermissionsScript(PermissionsConfig{Camera: "denied", Microphone: "denied", Geolocation: "granted", Notifications: "prompt"}),
+		readFixture(t, "permissions/full.js"))
+
+	// Plugins builder fixtures: platform-specific plugin sets.
+	assertEq(t, "plugins/win",
+		CreatePluginsScript(DefaultPluginsConfig("windows")),
+		readFixture(t, "plugins/win.js"))
+	assertEq(t, "plugins/mac",
+		CreatePluginsScript(DefaultPluginsConfig("macos")),
+		readFixture(t, "plugins/mac.js"))
+	assertEq(t, "plugins/linux",
+		CreatePluginsScript(DefaultPluginsConfig("linux")),
+		readFixture(t, "plugins/linux.js"))
+
+	// Fonts builder fixtures: per-OS whitelists.
+	assertEq(t, "fonts/win",
+		CreateFontsScript(DefaultFontsConfig("windows")),
+		readFixture(t, "fonts/win.js"))
+	assertEq(t, "fonts/mac",
+		CreateFontsScript(DefaultFontsConfig("macos")),
+		readFixture(t, "fonts/mac.js"))
+	assertEq(t, "fonts/linux",
+		CreateFontsScript(DefaultFontsConfig("linux")),
+		readFixture(t, "fonts/linux.js"))
+
+	// Combined launch bundle with all three new surfaces.
+	assertEq(t, "all/with_permissions_plugins_fonts",
+		GetAllProtectionScripts(&AllProtectionOptions{
+			Navigator:   &NavigatorConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8},
+			ClientHints: &ClientHintsScriptConfig{Platform: "Windows", PlatformVersion: "10.0.0", Architecture: "x86", Mobile: false, FullVersion: "120.0.6099.71"},
+			Permissions: &PermissionsConfig{Camera: "prompt", Microphone: "prompt", Geolocation: "prompt", Notifications: "default"},
+			Plugins:     &PluginsConfig{Plugins: DefaultPluginsConfig("windows").Plugins, MimeTypes: DefaultPluginsConfig("windows").MimeTypes},
+			Fonts:       &FontsConfig{Whitelist: DefaultFontsConfig("windows").Whitelist},
+		}),
+		readFixture(t, "all/with_permissions_plugins_fonts.js"))
 }
 
 func safeSlice(s string, lo, hi int) string {
@@ -245,5 +286,124 @@ func TestModeAwareBuilders(t *testing.T) {
 	}
 	if !strings.Contains(allReal, WebGLProtectionScript) {
 		t.Errorf("real modes should still leave WebGL protection in place")
+	}
+}
+
+// TestPermissionsBuilder verifies the permissions script contains the configured
+// states and preserves the async navigator.permissions.query signature.
+func TestPermissionsBuilder(t *testing.T) {
+	script := CreatePermissionsScript(PermissionsConfig{
+		Camera: "denied", Microphone: "prompt", Geolocation: "granted", Notifications: "default",
+	})
+	for _, want := range []string{"camera", "microphone", "geolocation", "notifications", "denied", "granted", "navigator.permissions.query"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("permissions script missing %q", want)
+		}
+	}
+	// Empty config should still produce a script that falls back to the real query.
+	empty := CreatePermissionsScript(PermissionsConfig{})
+	if !strings.Contains(empty, "navigator.permissions.query") {
+		t.Errorf("empty permissions script should still override navigator.permissions.query")
+	}
+}
+
+// TestPluginsBuilder verifies the plugins script builds array-like objects with
+// the expected methods and platform-specific entries.
+func TestPluginsBuilder(t *testing.T) {
+	win := CreatePluginsScript(DefaultPluginsConfig("windows"))
+	mac := CreatePluginsScript(DefaultPluginsConfig("macos"))
+	linux := CreatePluginsScript(DefaultPluginsConfig("linux"))
+
+	for _, script := range []string{win, mac, linux} {
+		for _, want := range []string{"'plugins'", "'mimeTypes'", "item", "namedItem", "Chrome PDF Plugin", "application/pdf"} {
+			if !strings.Contains(script, want) {
+				t.Errorf("plugins script missing %q", want)
+			}
+		}
+	}
+	if !strings.Contains(win, "Native Client") {
+		t.Errorf("windows plugin list should include Native Client")
+	}
+	if strings.Contains(mac, "Native Client") {
+		t.Errorf("macOS plugin list should not include Native Client")
+	}
+	if strings.Contains(linux, "Native Client") {
+		t.Errorf("linux plugin list should not include Native Client")
+	}
+	if !strings.Contains(win, "refresh") {
+		t.Errorf("navigator.plugins should expose refresh()")
+	}
+}
+
+// TestFontsBuilder verifies the fonts guard contains the whitelist and falls back
+// to the real document.fonts.check for non-whitelisted fonts.
+func TestFontsBuilder(t *testing.T) {
+	win := CreateFontsScript(DefaultFontsConfig("windows"))
+	if !strings.Contains(win, "Arial") {
+		t.Errorf("windows font whitelist should include Arial")
+	}
+	if !strings.Contains(win, "document.fonts.check") {
+		t.Errorf("fonts script should override document.fonts.check")
+	}
+	if !strings.Contains(win, "realCheck") {
+		t.Errorf("fonts script should capture the real check for fallback")
+	}
+
+	empty := CreateFontsScript(FontsConfig{})
+	if !strings.Contains(empty, "document.fonts.check") {
+		t.Errorf("empty font whitelist script should still override document.fonts.check")
+	}
+}
+
+// TestAllProtectionIncludesNewScripts verifies that the three new scripts are
+// emitted in the expected order between client hints and the automation bypass.
+func TestAllProtectionIncludesNewScripts(t *testing.T) {
+	all := GetAllProtectionScripts(&AllProtectionOptions{
+		Navigator:   &NavigatorConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8},
+		ClientHints: &ClientHintsScriptConfig{Platform: "Windows"},
+		Permissions: &PermissionsConfig{Camera: "denied"},
+		Plugins:     &PluginsConfig{Plugins: DefaultPluginsConfig("windows").Plugins, MimeTypes: DefaultPluginsConfig("windows").MimeTypes},
+		Fonts:       &FontsConfig{Whitelist: DefaultFontsConfig("windows").Whitelist},
+	})
+
+	idxNav := strings.Index(all, "Navigator spoofing enabled")
+	idxCH := strings.Index(all, "Client Hints spoofing enabled")
+	idxPerm := strings.Index(all, "Permissions spoofing enabled")
+	idxPlugins := strings.Index(all, "Plugins spoofing enabled")
+	idxFonts := strings.Index(all, "Fonts guard enabled")
+	idxBypass := strings.Index(all, "Automation bypass enabled")
+
+	for name, idx := range map[string]int{
+		"navigator": idxNav, "client-hints": idxCH, "permissions": idxPerm,
+		"plugins": idxPlugins, "fonts": idxFonts, "automation-bypass": idxBypass,
+	} {
+		if idx < 0 {
+			t.Fatalf("missing %s marker", name)
+		}
+	}
+
+	if !(idxNav < idxCH && idxCH < idxPerm && idxPerm < idxPlugins && idxPlugins < idxFonts && idxFonts < idxBypass) {
+		t.Errorf("unexpected script order: nav=%d ch=%d perm=%d plugins=%d fonts=%d bypass=%d",
+			idxNav, idxCH, idxPerm, idxPlugins, idxFonts, idxBypass)
+	}
+}
+
+// TestDefaultConfigsByPlatform verifies that the platform-specific plugin and font
+// defaults differ in the expected ways.
+func TestDefaultConfigsByPlatform(t *testing.T) {
+	if len(DefaultPluginsConfig("windows").Plugins) <= len(DefaultPluginsConfig("macos").Plugins) {
+		t.Errorf("windows plugin list should be longer than macOS due to Native Client")
+	}
+	if len(DefaultFontsConfig("windows").Whitelist) == 0 {
+		t.Errorf("windows font whitelist should not be empty")
+	}
+	if len(DefaultFontsConfig("macos").Whitelist) == 0 {
+		t.Errorf("macOS font whitelist should not be empty")
+	}
+	if len(DefaultFontsConfig("linux").Whitelist) == 0 {
+		t.Errorf("linux font whitelist should not be empty")
+	}
+	if DefaultPermissionsConfig("windows").Camera != "prompt" {
+		t.Errorf("unexpected default camera permission: %s", DefaultPermissionsConfig("windows").Camera)
 	}
 }
