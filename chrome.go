@@ -485,14 +485,29 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 		}
 	}
 	var webglCfg *fingerprint.WebGLScriptConfig
-	if fp != nil && fp.WebGL != nil {
-		webglCfg = &fingerprint.WebGLScriptConfig{Vendor: fp.WebGL.Vendor, Renderer: fp.WebGL.Renderer}
+	webrtcMode, canvasMode, audioMode := "fake", "noise", "noise"
+	if fp != nil {
+		if fp.WebGL != nil {
+			webglCfg = &fingerprint.WebGLScriptConfig{Vendor: fp.WebGL.Vendor, Renderer: fp.WebGL.Renderer}
+		}
+		if fp.WebRTC != "" {
+			webrtcMode = fp.WebRTC
+		}
+		if fp.Canvas != "" {
+			canvasMode = fp.Canvas
+		}
+		if fp.Audio != "" {
+			audioMode = fp.Audio
+		}
 	}
 	script := fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
 		Navigator: &fingerprint.NavigatorConfig{
 			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
 		},
 		WebGLConfig: webglCfg,
+		WebRTCMode:  webrtcMode,
+		CanvasMode:  canvasMode,
+		AudioMode:   audioMode,
 	})
 	if _, err := page.EvalOnNewDocument(script); err != nil {
 		return fmt.Errorf("inject protection scripts: %w", err)

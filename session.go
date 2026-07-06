@@ -272,6 +272,8 @@ func attachSession(ws string, profile *StoredProfile, lr *LaunchResult, launchCl
 // EvalOnNewDocument. Mirrors the TS patchPage SUBSET: navigator overrides
 // (always) + WebRTC leak protection + automation-detection bypass. It never
 // injects canvas/webgl/audio protections; the WebGL toggle is a dead field.
+// When opts.Fingerprint is provided, the WebRTC mode field ("disable" / "fake" /
+// "real") is honored; an empty value falls back to the v1.0 "fake" behavior.
 func PatchPage(page *rod.Page, opts PatchPageOptions) error {
 	if _, err := page.EvalOnNewDocument(patchPageScript(opts)); err != nil {
 		return fmt.Errorf("patch page: %w", err)
@@ -287,6 +289,12 @@ func patchPageScript(opts PatchPageOptions) string {
 	plugins := opts.Plugins == nil || *opts.Plugins
 	webrtc := opts.WebRTC == nil || *opts.WebRTC
 	chromeObj := opts.Chrome == nil || *opts.Chrome
+	webrtcMode := "fake"
+	if fp := opts.Fingerprint; fp != nil {
+		if fp.WebRTC != "" {
+			webrtcMode = fp.WebRTC
+		}
+	}
 	_ = opts.WebGL // DEAD: declared for TS parity, never injected (see doc comment).
 
 	language := ""
@@ -317,7 +325,7 @@ func patchPageScript(opts PatchPageOptions) string {
 		}),
 	}
 	if webrtc {
-		parts = append(parts, fingerprint.WebRTCProtectionScript)
+		parts = append(parts, fingerprint.CreateWebRTCProtectionScript(webrtcMode))
 	}
 	if webdriver || chromeObj || plugins {
 		parts = append(parts, fingerprint.AutomationBypassScript)
@@ -334,6 +342,7 @@ func protectionBundle(profile *StoredProfile) string {
 	language := "en-US"
 	hw, mem := 8, 8
 	var webglCfg *fingerprint.WebGLScriptConfig
+	webrtcMode, canvasMode, audioMode := "fake", "noise", "noise"
 	if profile != nil && profile.Fingerprint != nil {
 		fp := profile.Fingerprint
 		if fp.Platform != "" {
@@ -351,12 +360,24 @@ func protectionBundle(profile *StoredProfile) string {
 		if fp.WebGL != nil {
 			webglCfg = &fingerprint.WebGLScriptConfig{Vendor: fp.WebGL.Vendor, Renderer: fp.WebGL.Renderer}
 		}
+		if fp.WebRTC != "" {
+			webrtcMode = fp.WebRTC
+		}
+		if fp.Canvas != "" {
+			canvasMode = fp.Canvas
+		}
+		if fp.Audio != "" {
+			audioMode = fp.Audio
+		}
 	}
 	return fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
 		Navigator: &fingerprint.NavigatorConfig{
 			Language: language, Platform: platform, HardwareConcurrency: hw, DeviceMemory: mem,
 		},
 		WebGLConfig: webglCfg,
+		WebRTCMode:  webrtcMode,
+		CanvasMode:  canvasMode,
+		AudioMode:   audioMode,
 	})
 }
 
