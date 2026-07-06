@@ -269,6 +269,74 @@ func clientHintsConfigFromFingerprint(fp *FingerprintConfig) *fingerprint.Client
 	}
 }
 
+// pluginsFromGenerated converts fingerprint package plugin config to the root package type.
+func pluginsFromGenerated(in fingerprint.PluginsConfig) *PluginsConfig {
+	out := &PluginsConfig{
+		Plugins:   make([]PluginInfo, len(in.Plugins)),
+		MimeTypes: make([]PluginMimeType, len(in.MimeTypes)),
+	}
+	for i, p := range in.Plugins {
+		out.Plugins[i] = PluginInfo{
+			Name:        p.Name,
+			Filename:    p.Filename,
+			Description: p.Description,
+			Version:     p.Version,
+			MimeTypes:   make([]PluginMimeType, len(p.MimeTypes)),
+		}
+		for j, m := range p.MimeTypes {
+			out.Plugins[i].MimeTypes[j] = PluginMimeType{
+				Type:          m.Type,
+				Description:   m.Description,
+				Suffixes:      m.Suffixes,
+				EnabledPlugin: m.EnabledPlugin,
+			}
+		}
+	}
+	for i, m := range in.MimeTypes {
+		out.MimeTypes[i] = PluginMimeType{
+			Type:          m.Type,
+			Description:   m.Description,
+			Suffixes:      m.Suffixes,
+			EnabledPlugin: m.EnabledPlugin,
+		}
+	}
+	return out
+}
+
+// pluginsToFingerprint converts root package plugin config to the fingerprint builder type.
+func pluginsToFingerprint(in PluginsConfig) fingerprint.PluginsConfig {
+	out := fingerprint.PluginsConfig{
+		Plugins:   make([]fingerprint.PluginInfo, len(in.Plugins)),
+		MimeTypes: make([]fingerprint.PluginMimeType, len(in.MimeTypes)),
+	}
+	for i, p := range in.Plugins {
+		out.Plugins[i] = fingerprint.PluginInfo{
+			Name:        p.Name,
+			Filename:    p.Filename,
+			Description: p.Description,
+			Version:     p.Version,
+			MimeTypes:   make([]fingerprint.PluginMimeType, len(p.MimeTypes)),
+		}
+		for j, m := range p.MimeTypes {
+			out.Plugins[i].MimeTypes[j] = fingerprint.PluginMimeType{
+				Type:          m.Type,
+				Description:   m.Description,
+				Suffixes:      m.Suffixes,
+				EnabledPlugin: m.EnabledPlugin,
+			}
+		}
+	}
+	for i, m := range in.MimeTypes {
+		out.MimeTypes[i] = fingerprint.PluginMimeType{
+			Type:          m.Type,
+			Description:   m.Description,
+			Suffixes:      m.Suffixes,
+			EnabledPlugin: m.EnabledPlugin,
+		}
+	}
+	return out
+}
+
 // CreateSession is a lightweight temporary session with a random fingerprint.
 //
 // [DIVERGENCE] Unlike the TS createSession (which builds its own puppeteer.launch
@@ -308,6 +376,16 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 				Mobile:          gen.ClientHints.Mobile,
 				Brands:          brandsFromGenerated(gen.ClientHints.Brands),
 				FullVersion:     gen.ClientHints.FullVersion,
+			},
+			Permissions: &PermissionsConfig{
+				Camera:        gen.Permissions.Camera,
+				Microphone:    gen.Permissions.Microphone,
+				Geolocation:   gen.Permissions.Geolocation,
+				Notifications: gen.Permissions.Notifications,
+			},
+			Plugins: pluginsFromGenerated(gen.Plugins),
+			Fonts: &FontsConfig{
+				Whitelist: gen.Fonts.Whitelist,
 			},
 		}
 	}
@@ -364,6 +442,15 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 				fpc.WebGL = &WebGLConfig{}
 			}
 			fpc.WebGL.Renderer = o.WebGL.Renderer
+		}
+		if o.Permissions != nil {
+			fpc.Permissions = o.Permissions
+		}
+		if o.Plugins != nil {
+			fpc.Plugins = o.Plugins
+		}
+		if o.Fonts != nil {
+			fpc.Fonts = o.Fonts
 		}
 	}
 
@@ -617,6 +704,33 @@ func protectionBundle(profile *StoredProfile) string {
 		}
 		chCfg = clientHintsConfigFromFingerprint(fp)
 	}
+
+	platformKey := fingerprint.PlatformKey(platform)
+	permCfg := fingerprint.DefaultPermissionsConfig(platformKey)
+	if profile != nil && profile.Fingerprint != nil && profile.Fingerprint.Permissions != nil {
+		fp := profile.Fingerprint
+		if fp.Permissions.Camera != "" {
+			permCfg.Camera = fp.Permissions.Camera
+		}
+		if fp.Permissions.Microphone != "" {
+			permCfg.Microphone = fp.Permissions.Microphone
+		}
+		if fp.Permissions.Geolocation != "" {
+			permCfg.Geolocation = fp.Permissions.Geolocation
+		}
+		if fp.Permissions.Notifications != "" {
+			permCfg.Notifications = fp.Permissions.Notifications
+		}
+	}
+	pluginsCfg := fingerprint.DefaultPluginsConfig(platformKey)
+	if profile != nil && profile.Fingerprint != nil && profile.Fingerprint.Plugins != nil {
+		pluginsCfg = pluginsToFingerprint(*profile.Fingerprint.Plugins)
+	}
+	fontsCfg := fingerprint.DefaultFontsConfig(platformKey)
+	if profile != nil && profile.Fingerprint != nil && profile.Fingerprint.Fonts != nil && len(profile.Fingerprint.Fonts.Whitelist) > 0 {
+		fontsCfg.Whitelist = profile.Fingerprint.Fonts.Whitelist
+	}
+
 	return fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
 		Navigator:   &navCfg,
 		WebGLConfig: webglCfg,
@@ -624,6 +738,9 @@ func protectionBundle(profile *StoredProfile) string {
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
 		ClientHints: chCfg,
+		Permissions: &permCfg,
+		Plugins:     &pluginsCfg,
+		Fonts:       &fontsCfg,
 	})
 }
 

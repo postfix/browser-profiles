@@ -306,6 +306,9 @@ type GeneratedFingerprint struct {
 	WebRTC              string          `json:"webrtc"` // "disable" | "fake" | "real"
 	Canvas              string          `json:"canvas"` // "noise" | "real"
 	Audio               string          `json:"audio"`  // "noise" | "real"
+	Permissions         PermissionsConfig `json:"permissions"`
+	Plugins             PluginsConfig     `json:"plugins"`
+	Fonts               FontsConfig       `json:"fonts"`
 	Meta                FingerprintMeta `json:"meta"`
 }
 
@@ -428,6 +431,9 @@ func GenerateFingerprint(opts GenerateFingerprintOptions) GeneratedFingerprint {
 			},
 			FullVersion: ParseChromeFullVersion(userAgent),
 		},
+		Permissions: DefaultPermissionsConfig(selPlat),
+		Plugins:     DefaultPluginsConfig(selPlat),
+		Fonts:       DefaultFontsConfig(selPlat),
 		Meta: FingerprintMeta{
 			GeneratedAt: time.Now(),
 			Seed:        seed,

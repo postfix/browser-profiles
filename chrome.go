@@ -572,7 +572,32 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 		if fp.Audio != "" {
 			audioMode = fp.Audio
 		}
-	chCfg = clientHintsConfigFromFingerprint(fp)
+		chCfg = clientHintsConfigFromFingerprint(fp)
+	}
+
+	platformKey := fingerprint.PlatformKey(platform)
+	permCfg := fingerprint.DefaultPermissionsConfig(platformKey)
+	if fp != nil && fp.Permissions != nil {
+		if fp.Permissions.Camera != "" {
+			permCfg.Camera = fp.Permissions.Camera
+		}
+		if fp.Permissions.Microphone != "" {
+			permCfg.Microphone = fp.Permissions.Microphone
+		}
+		if fp.Permissions.Geolocation != "" {
+			permCfg.Geolocation = fp.Permissions.Geolocation
+		}
+		if fp.Permissions.Notifications != "" {
+			permCfg.Notifications = fp.Permissions.Notifications
+		}
+	}
+	pluginsCfg := fingerprint.DefaultPluginsConfig(platformKey)
+	if fp != nil && fp.Plugins != nil {
+		pluginsCfg = pluginsToFingerprint(*fp.Plugins)
+	}
+	fontsCfg := fingerprint.DefaultFontsConfig(platformKey)
+	if fp != nil && fp.Fonts != nil && len(fp.Fonts.Whitelist) > 0 {
+		fontsCfg.Whitelist = fp.Fonts.Whitelist
 	}
 
 	script := fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
@@ -582,6 +607,9 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
 		ClientHints: chCfg,
+		Permissions: &permCfg,
+		Plugins:     &pluginsCfg,
+		Fonts:       &fontsCfg,
 	})
 	if _, err := page.EvalOnNewDocument(script); err != nil {
 		return fmt.Errorf("inject protection scripts: %w", err)
