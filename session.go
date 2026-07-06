@@ -363,6 +363,8 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 			DeviceMemory:        gen.DeviceMemory,
 			Screen:              &ScreenConfig{Width: gen.Screen.Width, Height: gen.Screen.Height, DeviceScaleFactor: float64(gen.Screen.DevicePixelRatio)},
 			WebGL:               &WebGLConfig{Vendor: gen.WebGL.Vendor, Renderer: gen.WebGL.Renderer, Caps: capsFromGenerated(gen.WebGL.Caps)},
+			WebGPU:              &WebGPUConfig{Vendor: gen.WebGPU.Vendor, Architecture: gen.WebGPU.Architecture, Device: gen.WebGPU.Device, Description: gen.WebGPU.Description},
+			Timing:              &TimingConfig{Enabled: gen.Timing.Enabled, Precision: gen.Timing.Precision},
 			AppVersion:          gen.AppVersion,
 			ProductSub:          gen.ProductSub,
 			Vendor:              gen.Vendor,
@@ -442,6 +444,12 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 				fpc.WebGL = &WebGLConfig{}
 			}
 			fpc.WebGL.Renderer = o.WebGL.Renderer
+		}
+		if o.WebGPU != nil {
+			fpc.WebGPU = o.WebGPU
+		}
+		if o.Timing != nil {
+			fpc.Timing = o.Timing
 		}
 		if o.Permissions != nil {
 			fpc.Permissions = o.Permissions
@@ -731,12 +739,56 @@ func protectionBundle(profile *StoredProfile) string {
 		fontsCfg.Whitelist = profile.Fingerprint.Fonts.Whitelist
 	}
 
+	fp := profile.Fingerprint
+	derivedGpuFamily := fingerprint.InferGPUFamily(platform, "", "")
+	webgpuCfg := fingerprint.DefaultWebGPUConfig(derivedGpuFamily)
+	if fp != nil && fp.WebGPU != nil {
+		if fp.WebGPU.Vendor != "" {
+			webgpuCfg.Vendor = fp.WebGPU.Vendor
+		}
+		if fp.WebGPU.Architecture != "" {
+			webgpuCfg.Architecture = fp.WebGPU.Architecture
+		}
+		if fp.WebGPU.Device != "" {
+			webgpuCfg.Device = fp.WebGPU.Device
+		}
+		if fp.WebGPU.Description != "" {
+			webgpuCfg.Description = fp.WebGPU.Description
+		}
+	}
+	if webglCfg != nil && webglCfg.Vendor != "" && webglCfg.Renderer != "" {
+		webgpuCfg = fingerprint.DefaultWebGPUConfig(fingerprint.InferGPUFamily(platform, webglCfg.Vendor, webglCfg.Renderer))
+		if fp != nil && fp.WebGPU != nil {
+			if fp.WebGPU.Vendor != "" {
+				webgpuCfg.Vendor = fp.WebGPU.Vendor
+			}
+			if fp.WebGPU.Architecture != "" {
+				webgpuCfg.Architecture = fp.WebGPU.Architecture
+			}
+			if fp.WebGPU.Device != "" {
+				webgpuCfg.Device = fp.WebGPU.Device
+			}
+			if fp.WebGPU.Description != "" {
+				webgpuCfg.Description = fp.WebGPU.Description
+			}
+		}
+	}
+	timingCfg := fingerprint.DefaultTimingConfig()
+	if fp != nil && fp.Timing != nil {
+		timingCfg.Enabled = fp.Timing.Enabled
+		if fp.Timing.Precision > 0 {
+			timingCfg.Precision = fp.Timing.Precision
+		}
+	}
+
 	return fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
 		Navigator:   &navCfg,
 		WebGLConfig: webglCfg,
 		WebRTCMode:  webrtcMode,
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
+		WebGPU:      &webgpuCfg,
+		Timing:      &timingCfg,
 		ClientHints: chCfg,
 		Permissions: &permCfg,
 		Plugins:     &pluginsCfg,

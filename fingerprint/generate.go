@@ -309,6 +309,8 @@ type GeneratedFingerprint struct {
 	Permissions         PermissionsConfig `json:"permissions"`
 	Plugins             PluginsConfig     `json:"plugins"`
 	Fonts               FontsConfig       `json:"fonts"`
+	WebGPU              WebGPUConfig      `json:"webgpu"`
+	Timing              TimingConfig      `json:"timing"`
 	Meta                FingerprintMeta `json:"meta"`
 }
 
@@ -324,6 +326,26 @@ func randBase36(n int) string {
 		b[i] = base36[rand.IntN(len(base36))]
 	}
 	return string(b)
+}
+
+// InferGPUFamily maps a platform and optional WebGL vendor/renderer strings to the
+// canonical GPU family used by DefaultWebGPUConfig and the WebGL caps table.
+func InferGPUFamily(platform, vendor, renderer string) string {
+	rendererU := strings.ToUpper(renderer)
+	vendorU := strings.ToUpper(vendor)
+	if strings.Contains(rendererU, "NVIDIA") || strings.Contains(vendorU, "NVIDIA") {
+		return "nvidia"
+	}
+	if strings.Contains(rendererU, "AMD") || strings.Contains(rendererU, "RADEON") || strings.Contains(vendorU, "AMD") {
+		return "amd"
+	}
+	if strings.Contains(rendererU, "INTEL") || strings.Contains(vendorU, "INTEL") {
+		return "intel"
+	}
+	if strings.Contains(platform, "Mac") || strings.Contains(strings.ToLower(platform), "mac") {
+		return "apple"
+	}
+	return "intel"
 }
 
 // GenerateFingerprint builds a realistic, consistent fingerprint (ports generateFingerprint).
@@ -434,6 +456,8 @@ func GenerateFingerprint(opts GenerateFingerprintOptions) GeneratedFingerprint {
 		Permissions: DefaultPermissionsConfig(selPlat),
 		Plugins:     DefaultPluginsConfig(selPlat),
 		Fonts:       DefaultFontsConfig(selPlat),
+		WebGPU:      DefaultWebGPUConfig(selGpu),
+		Timing:      DefaultTimingConfig(),
 		Meta: FingerprintMeta{
 			GeneratedAt: time.Now(),
 			Seed:        seed,

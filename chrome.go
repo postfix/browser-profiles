@@ -600,12 +600,55 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 		fontsCfg.Whitelist = fp.Fonts.Whitelist
 	}
 
+	derivedGpuFamily := fingerprint.InferGPUFamily(platform, "", "")
+	webgpuCfg := fingerprint.DefaultWebGPUConfig(derivedGpuFamily)
+	if fp != nil && fp.WebGPU != nil {
+		if fp.WebGPU.Vendor != "" {
+			webgpuCfg.Vendor = fp.WebGPU.Vendor
+		}
+		if fp.WebGPU.Architecture != "" {
+			webgpuCfg.Architecture = fp.WebGPU.Architecture
+		}
+		if fp.WebGPU.Device != "" {
+			webgpuCfg.Device = fp.WebGPU.Device
+		}
+		if fp.WebGPU.Description != "" {
+			webgpuCfg.Description = fp.WebGPU.Description
+		}
+	}
+	if webglCfg != nil && webglCfg.Vendor != "" && webglCfg.Renderer != "" {
+		webgpuCfg = fingerprint.DefaultWebGPUConfig(fingerprint.InferGPUFamily(platform, webglCfg.Vendor, webglCfg.Renderer))
+		if fp != nil && fp.WebGPU != nil {
+			if fp.WebGPU.Vendor != "" {
+				webgpuCfg.Vendor = fp.WebGPU.Vendor
+			}
+			if fp.WebGPU.Architecture != "" {
+				webgpuCfg.Architecture = fp.WebGPU.Architecture
+			}
+			if fp.WebGPU.Device != "" {
+				webgpuCfg.Device = fp.WebGPU.Device
+			}
+			if fp.WebGPU.Description != "" {
+				webgpuCfg.Description = fp.WebGPU.Description
+			}
+		}
+	}
+	timingCfg := fingerprint.DefaultTimingConfig()
+	if fp != nil && fp.Timing != nil {
+		timingCfg.Enabled = fp.Timing.Enabled
+		if fp.Timing.Precision > 0 {
+			timingCfg.Precision = fp.Timing.Precision
+		}
+	}
+
 	script := fingerprint.GetAllProtectionScripts(&fingerprint.AllProtectionOptions{
 		Navigator:   &navCfg,
 		WebGLConfig: webglCfg,
 		WebRTCMode:  webrtcMode,
 		CanvasMode:  canvasMode,
 		AudioMode:   audioMode,
+		WebGPU:      &webgpuCfg,
+		Timing:      &timingCfg,
 		ClientHints: chCfg,
 		Permissions: &permCfg,
 		Plugins:     &pluginsCfg,
@@ -621,6 +664,12 @@ func applyAntiDetect(page *rod.Page, profile *StoredProfile) error {
 	}
 	if err := (proto.EmulationSetTimezoneOverride{TimezoneID: tz}).Call(page); err != nil {
 		return fmt.Errorf("set timezone: %w", err)
+	}
+
+	if fp != nil && fp.CPUThrottlingRate > 0 {
+		if err := (proto.EmulationSetCPUThrottlingRate{Rate: fp.CPUThrottlingRate}).Call(page); err != nil {
+			return fmt.Errorf("set cpu throttling rate: %w", err)
+		}
 	}
 
 	for _, c := range profile.Cookies {

@@ -6,6 +6,7 @@ package browserprofiles
 import (
 	"bytes"
 	"strconv"
+	"time"
 )
 
 // VERSION is the library version (ported from @aitofy/browser-profiles).
@@ -186,12 +187,31 @@ type WebGLConfig struct {
 	Caps     *WebGLCaps `json:"caps,omitempty"`
 }
 
+// WebGPUConfig carries the GPU adapter identity returned by navigator.gpu.requestAdapter.
+// It mirrors the fingerprint package builder type so JSON encoding omits empty fields.
+type WebGPUConfig struct {
+	Vendor       string `json:"vendor,omitempty"`
+	Architecture string `json:"architecture,omitempty"`
+	Device       string `json:"device,omitempty"`
+	Description  string `json:"description,omitempty"`
+}
+
+// TimingConfig gates optional rounding of performance.now() and Date.now().
+// When Enabled is false (the default) the timing script is a no-op. Precision
+// is the rounding quantum, e.g. 1ms or 100µs.
+type TimingConfig struct {
+	Enabled   bool          `json:"enabled,omitempty"`
+	Precision time.Duration `json:"precision,omitempty"`
+}
+
 // FingerprintConfig is the anti-detect fingerprint configuration.
 type FingerprintConfig struct {
 	UserAgent           string             `json:"userAgent,omitempty"`
 	Language            string             `json:"language,omitempty"`
 	Screen              *ScreenConfig      `json:"screen,omitempty"`
 	WebGL               *WebGLConfig       `json:"webgl,omitempty"`
+	WebGPU              *WebGPUConfig      `json:"webgpu,omitempty"`
+	Timing              *TimingConfig      `json:"timing,omitempty"`
 	Platform            string             `json:"platform,omitempty"`
 	HardwareConcurrency int                `json:"hardwareConcurrency,omitempty"`
 	DeviceMemory        int                `json:"deviceMemory,omitempty"`
@@ -208,6 +228,7 @@ type FingerprintConfig struct {
 	Permissions         *PermissionsConfig    `json:"permissions,omitempty"`
 	Plugins             *PluginsConfig        `json:"plugins,omitempty"`
 	Fonts               *FontsConfig          `json:"fonts,omitempty"`
+	CPUThrottlingRate   float64               `json:"cpuThrottlingRate,omitempty"`
 }
 
 // ProfileConfig is the input configuration for a browser profile.

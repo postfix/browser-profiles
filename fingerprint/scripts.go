@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //go:embed scripts/*.js
@@ -47,6 +48,8 @@ var (
 	permissionsTmpl        = mustRead("permissions.tmpl.js")
 	pluginsTmpl            = mustRead("plugins.tmpl.js")
 	fontsTmpl              = mustRead("fonts.tmpl.js")
+	webgpuTmpl             = mustRead("webgpu.tmpl.js")
+	timingTmpl             = mustRead("timing.tmpl.js")
 )
 
 // marshalNoEscape mirrors JS JSON.stringify: compact, no HTML escaping of < > &.
@@ -497,6 +500,76 @@ func CreateWebGLScript(c WebGLScriptConfig) string {
 	).Replace(webglTmpl)
 }
 
+// WebGPUConfig carries the GPUAdapterInfo fields returned by the spoofed
+// navigator.gpu.requestAdapter() adapter.
+type WebGPUConfig struct {
+	Vendor       string `json:"vendor,omitempty"`
+	Architecture string `json:"architecture,omitempty"`
+	Device       string `json:"device,omitempty"`
+	Description  string `json:"description,omitempty"`
+}
+
+// DefaultWebGPUConfig maps a GPU family to a coherent GPUAdapterInfo shape.
+// Unknown families fall back to the intel table so the spoof is always safe.
+func DefaultWebGPUConfig(gpuFamily string) WebGPUConfig {
+	f := strings.ToLower(strings.TrimSpace(gpuFamily))
+	switch f {
+	case "nvidia":
+		return WebGPUConfig{
+			Vendor: "nvidia", Architecture: "x86", Device: "NVIDIA GeForce RTX 3080", Description: "NVIDIA GeForce RTX 3080",
+		}
+	case "amd":
+		return WebGPUConfig{
+			Vendor: "amd", Architecture: "x86", Device: "AMD Radeon RX 580", Description: "AMD Radeon RX 580",
+		}
+	case "apple":
+		return WebGPUConfig{
+			Vendor: "apple", Architecture: "apple", Device: "Apple M3", Description: "Apple M3",
+		}
+	case "intel", "":
+		fallthrough
+	default:
+		return WebGPUConfig{
+			Vendor: "intel", Architecture: "x86", Device: "Intel(R) UHD Graphics 630", Description: "Intel UHD Graphics 630",
+		}
+	}
+}
+
+// CreateWebGPUScript overrides navigator.gpu.requestAdapter to return a mocked
+// adapter whose info object is consistent with the configured GPU family.
+func CreateWebGPUScript(c WebGPUConfig) string {
+	return strings.ReplaceAll(webgpuTmpl, "%%WGPUJSON%%", marshalNoEscape(c))
+}
+
+// TimingConfig gates optional rounding of performance.now() and Date.now().
+// Precision is the rounding quantum, e.g. 1ms or 100µs.
+type TimingConfig struct {
+	Enabled   bool          `json:"enabled,omitempty"`
+	Precision time.Duration `json:"precision,omitempty"`
+}
+
+// DefaultTimingConfig returns the v1.0-compatible default: timing spoofing is
+// disabled. When enabled without an explicit precision, 1ms is used.
+func DefaultTimingConfig() TimingConfig {
+	return TimingConfig{Enabled: false, Precision: time.Millisecond}
+}
+
+// CreateTimingScript overrides performance.now() and Date.now() to round to the
+// configured precision. When Enabled is false, the script is emitted as a no-op.
+func CreateTimingScript(c TimingConfig) string {
+	type timingScriptJSON struct {
+		Enabled     bool    `json:"enabled"`
+		PrecisionMs float64 `json:"precisionMs"`
+	}
+	j := timingScriptJSON{Enabled: c.Enabled}
+	if c.Precision > 0 {
+		j.PrecisionMs = float64(c.Precision) / float64(time.Millisecond)
+	} else {
+		j.PrecisionMs = 1.0
+	}
+	return strings.ReplaceAll(timingTmpl, "%%TIMINGJSON%%", marshalNoEscape(j))
+}
+
 // normalizeMode trims and lowercases a mode string. Empty input returns the default.
 // Unrecognized values are returned as-is and must be validated by the caller.
 func normalizeMode(mode, defaultMode string) string {
@@ -563,6 +636,8 @@ type AllProtectionOptions struct {
 	AudioMode   string
 	Navigator   *NavigatorConfig
 	WebGLConfig *WebGLScriptConfig // per-profile UNMASKED vendor/renderer; nil ⇒ verbatim webgl.js
+	WebGPU      *WebGPUConfig
+	Timing      *TimingConfig
 	ClientHints *ClientHintsScriptConfig
 	Permissions *PermissionsConfig
 	Plugins     *PluginsConfig
@@ -598,6 +673,14 @@ func GetAllProtectionScripts(o *AllProtectionOptions) string {
 		if s := CreateAudioProtectionScript(o.AudioMode); s != "" {
 			scripts = append(scripts, s)
 		}
+	}
+	if o.WebGPU != nil {
+		scripts = append(scripts, CreateWebGPUScript(*o.WebGPU))
+	} else {
+		scripts = append(scripts, CreateWebGPUScript(DefaultWebGPUConfig("")))
+	}
+	if o.Timing != nil && o.Timing.Enabled {
+		scripts = append(scripts, CreateTimingScript(*o.Timing))
 	}
 	if o.Navigator != nil {
 		scripts = append(scripts, CreateNavigatorScript(*o.Navigator))
@@ -664,6 +747,10 @@ func GetFingerprintScripts(fp GeneratedFingerprint) string {
 	scripts = append(scripts, WebGLProtectionScript)
 	if s := CreateAudioProtectionScript(fp.Audio); s != "" {
 		scripts = append(scripts, s)
+	}
+	scripts = append(scripts, CreateWebGPUScript(fp.WebGPU))
+	if fp.Timing.Enabled {
+		scripts = append(scripts, CreateTimingScript(fp.Timing))
 	}
 	scripts = append(scripts, CreatePermissionsScript(fp.Permissions))
 	scripts = append(scripts, CreatePluginsScript(fp.Plugins))
