@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-07
+
+### Added
+
+- **Persistent `CreateSession` (Phase 15).** `CreateSession(CreateSessionOptions{Temporary: ptr(false),
+  Name: "..."})` now creates or reuses a real, name-addressable, on-disk profile instead of returning
+  an error. An empty `Name` always creates a fresh profile (auto-generated ID); a non-empty `Name`
+  that already exists is reused as-is, including cross-process adoption (the existing running Chrome
+  is adopted via the session lock file rather than a second instance being spawned). `Terminate` never
+  deletes a persistent profile (only auto-named `QuickLaunch` sessions delete on terminate). On reuse,
+  any `Fingerprint`/`Proxy`/`Timezone`/`RandomFingerprint` values passed to `CreateSessionOptions` are
+  ignored in favor of the profile's already-stored values — this is structurally enforced (`LaunchOptions`
+  has no `Fingerprint`/`Proxy`/`Timezone` field), not a policy choice. See `docs/ARCHITECTURE.md`'s new
+  "Persistent sessions" section for the full resolve/reuse/create trace.
+- **Full godoc `Example` coverage (Phase 16).** Every DOCS-01 public entry point (`CreateSession` in
+  both temporary and persistent modes, `WithProfile`, `QuickLaunch`, `PatchPage`,
+  `LaunchChromeStandalone`, `BrowserProfiles.Create`/`Launch`, `fingerprint.GenerateFingerprint`) now
+  has a godoc `Example` function (`example_test.go`, `fingerprint/example_test.go`). The two Chrome-free
+  examples (`ExampleBrowserProfiles_Create`, `ExampleGenerateFingerprint`) are execution-checked with a
+  deterministic `// Output:` on every `go test` run; the other seven require a real Chrome process and
+  are compile-checked only. `README.md`/`docs/ARCHITECTURE.md`/`llms.txt` were updated to document
+  persistent sessions with zero drift from the new Examples.
+
 ## [1.1.0] - 2026-07-06
 
 ### Changed

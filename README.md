@@ -106,15 +106,46 @@ p, err := profiles.Create(bp.ProfileConfig{
 	Name:  "My Account",
 	Proxy: &bp.ProxyConfig{Type: "http", Host: "proxy.example.com", Port: 8080, Username: "u", Password: "p"},
 })
+if err != nil {
+	log.Fatal(err)
+}
 
 // Launch it and drive it with go-rod.
 sess, err := bp.WithProfile(profiles, p.ID, bp.LaunchOptions{})
+if err != nil {
+	log.Fatal(err)
+}
 defer sess.Close()
 sess.Page.MustNavigate("https://whoer.net")
 ```
 
 `Create` accepts a custom `ID` (1–64 chars, `[a-zA-Z0-9_-]`); launch by ID or name via
 `WithProfile(profiles, "My Account", …)` (case-insensitive).
+
+### Persistent session (create-or-reuse by name)
+
+```go
+sess, err := bp.CreateSession(bp.CreateSessionOptions{
+	Temporary: new(false),
+	Name:      "my-persistent-session",
+	Headless:  true,
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer sess.Terminate()
+
+// A second call with Name: "my-persistent-session" reuses this same
+// on-disk profile instead of creating a new one.
+sess.Page.MustNavigate("https://whoer.net")
+```
+
+A second `CreateSession` call with the same `Name` reuses the existing on-disk
+profile (including cross-process adoption via the session lock file) instead
+of creating a new one. **On reuse, any `Fingerprint`/`Proxy`/`Timezone`/
+`RandomFingerprint` overrides passed to `CreateSessionOptions` are ignored** —
+the profile's already-stored values win. Pass an empty `Name` to always
+create a fresh profile.
 
 ### Standalone launch (no profile, raw endpoint)
 
@@ -123,6 +154,9 @@ res, err := bp.LaunchChromeStandalone(bp.StandaloneLaunchOptions{
 	Headless: true,
 	Proxy:    &bp.ProxyConfig{Type: "socks5", Host: "proxy.example.com", Port: 1080, Username: "u", Password: "p"},
 })
+if err != nil {
+	log.Fatal(err)
+}
 defer res.Close()
 // res.WsEndpoint / res.PID / res.Port — connect any CDP client, e.g. rod.New().ControlURL(res.WsEndpoint)
 ```
@@ -190,7 +224,7 @@ browser-profiles --version
   `GetByIdOrName`, `List`, `Update`, `Delete`, `CreateGroup`/`ListGroups`/`DeleteGroup`/`MoveToGroup`,
   `Duplicate`, `Export`/`Import`, `Launch`/`LaunchByName`/`LaunchByIdOrName`, `Close`/`CloseAll`/`GetRunning`.
 - `WithProfile(bp, idOrName, LaunchOptions)` / `QuickLaunch(QuickLaunchOptions)` /
-  `CreateSession(CreateSessionOptions)` → `*Session{Browser, Page, Close, Terminate}`.
+  `CreateSession(CreateSessionOptions)` (`Temporary`/`Name` select temporary vs. persistent create-or-reuse) → `*Session{Browser, Page, Close, Terminate}`.
 - `LaunchChrome` / `LaunchChromeStandalone`, `GetChromePath`, `PatchPage`.
 - Package `fingerprint`: `GenerateFingerprint`, `GetAllProtectionScripts`, `GetFingerprintScripts`,
   and the protection-script constants.
@@ -213,7 +247,12 @@ browser-profiles --version
   ```
   Timing rounds `performance.now()`/`Date.now()` to `Precision` (monotonic, drift-free); CPU
   throttling is a per-launch CDP setting only, so it is not re-applied to tabs opened later.
-- Persistent (`Temporary: false`) `CreateSession` is not yet implemented; use a stored profile.
+- **Persistent sessions (`Temporary: false`) create-or-reuse a real on-disk profile by `Name`**: an
+  empty `Name` always creates a fresh profile; a non-empty `Name` that already exists is reused as-is
+  (including across processes, via the session lock file) instead of creating a new one. **On reuse,
+  any `Fingerprint`/`Proxy`/`Timezone`/`RandomFingerprint` values passed to `CreateSessionOptions` are
+  ignored** — the profile's already-stored values are used instead; only a fresh `Name` picks up new
+  overrides.
 
 ## License
 

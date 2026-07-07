@@ -43,6 +43,20 @@ defer sess.Terminate()
 sess.Page.MustNavigate("https://example.com")
 ```
 
+### Persistent session (create-or-reuse by name)
+
+```go
+sess, _ := bp.CreateSession(bp.CreateSessionOptions{
+    Temporary: new(false),
+    Name:      "my-persistent-session",
+})
+defer sess.Terminate()
+sess.Page.MustNavigate("https://whoer.net")
+```
+
+A second call with the same Name reuses the on-disk profile; reuse ignores any
+Fingerprint/Proxy/Timezone overrides passed in (the stored profile's values win).
+
 ### Profile management + launch
 
 ```go

@@ -104,6 +104,39 @@ with `groups/<id>.json`, **format-compatible** with the reference (reads its `co
 writes semantically-equivalent 2-space JSON). `data/` is the Chrome `--user-data-dir`. Cross-process
 session reuse is tracked via `.browser-lock.json` (a `/json/version` probe decides reconnect).
 
+## Persistent sessions
+
+`CreateSession(CreateSessionOptions{Temporary: ptr(false), Name: ...})` (`session.go:475-499`)
+layers create-or-reuse-by-`Name` semantics on top of the profile store and `WithProfile`:
+
+1. **Resolve.** If `opts.Name` is non-empty, `bp.GetByIdOrName(opts.Name)` (`session.go:480`,
+   `profiles.go`'s `GetByIdOrName` — tries `Get` by ID first, then falls back to `GetByName`)
+   looks for an existing profile with that ID or name.
+2. **Reuse (unconditional early return).** If found, `session.go:485` returns immediately —
+   `WithProfile(bp, profile.ID, LaunchOptions{Headless, ChromePath, Args})` — before control ever
+   reaches the fingerprint-building or `bp.Create` code below it. No `FingerprintConfig` is built
+   and no write to `config.json` occurs on this path.
+3. **Create.** Otherwise (`opts.Name == ""`, or no existing profile matched), `buildSessionFingerprint`
+   generates a fingerprint, `id` falls back to the existing `session-<unixmilli>-<hex>` scheme when
+   `opts.Name` is empty, and `bp.Create(ProfileConfig{ID: id, Name: id, Proxy, Timezone, Fingerprint})`
+   persists a new profile before launching it the same way.
+
+**PERSIST-03 is structural, not a policy choice.** `LaunchOptions` (`types.go:264-272`) has no
+`Fingerprint`, `Proxy`, or `Timezone` field — only `Headless`, `ChromePath`, `Args`, `Extensions`,
+`DefaultViewport`, `SlowMo`, `Timeout`. Since the reuse path launches exclusively through
+`WithProfile(bp, profile.ID, LaunchOptions{...})`, and `WithProfile`/`bp.Launch` always load the
+profile's already-stored `Fingerprint`/`Proxy`/`Timezone` from its `config.json`, there is no code
+path by which a reused profile's stored fingerprint/proxy/timezone could be overridden by
+`CreateSessionOptions` — the type system, not a runtime check, rules it out. A caller can still
+change a persistent profile's fingerprint by using `BrowserProfiles.Update` directly.
+
+**Trust model (unchanged from pre-v1.2).** Reuse-by-`Name` uses exactly the same lookup
+(`GetByIdOrName`) that `WithProfile(bp, idOrName, ...)` has always used — any caller who can supply
+a `Name`/`idOrName` string can launch into whatever existing profile matches it, case-insensitively
+for name matches. This introduces no new capability and no new attack surface versus v1.1: it is
+the pre-existing `WithProfile` trust boundary applied automatically inside `CreateSession`, not a
+new one.
+
 ## Fingerprint engine
 
 `fingerprint.GenerateFingerprint` produces a realistic, consistent fingerprint from per-OS/GPU/screen
