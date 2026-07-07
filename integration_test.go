@@ -582,6 +582,51 @@ func TestCreateSessionPersistentReuseIgnoresOverrides(t *testing.T) {
 	}
 }
 
+// TestCreateSessionPersistentEmptyNameAlwaysCreatesFresh (PERSIST-02, D-01)
+// proves an empty Name never triggers reuse-by-empty-name: two persistent
+// CreateSession calls with Name == "" always mint distinct auto-generated
+// IDs, and each is a genuine separate on-disk profile.
+func TestCreateSessionPersistentEmptyNameAlwaysCreatesFresh(t *testing.T) {
+	requireChrome(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	sess1, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "", Headless: true})
+	if err != nil {
+		t.Fatalf("first CreateSession: %v", err)
+	}
+	t.Cleanup(func() { _ = sess1.Terminate() })
+
+	sess2, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "", Headless: true})
+	if err != nil {
+		t.Fatalf("second CreateSession: %v", err)
+	}
+	t.Cleanup(func() { _ = sess2.Terminate() })
+
+	if sess1.ID == sess2.ID {
+		t.Fatalf("two empty-Name CreateSession calls produced the same ID %q, want distinct auto-generated IDs", sess1.ID)
+	}
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{})
+	got1, err := bp.Get(sess1.ID)
+	if err != nil {
+		t.Fatalf("bp.Get(sess1.ID): %v", err)
+	}
+	if got1 == nil {
+		t.Fatalf("profile %q was not persisted to disk", sess1.ID)
+	}
+	got2, err := bp.Get(sess2.ID)
+	if err != nil {
+		t.Fatalf("bp.Get(sess2.ID): %v", err)
+	}
+	if got2 == nil {
+		t.Fatalf("profile %q was not persisted to disk", sess2.ID)
+	}
+	if got1.ID == got2.ID {
+		t.Fatalf("bp.Get resolved both sessions to the same stored profile ID %q", got1.ID)
+	}
+}
+
 // TestPatchPageInjectionOnExternalPage (INT-03) proves PatchPage really injects
 // its protection subset into an EXTERNAL page. A page opened directly on a
 // standalone browser is not auto-patched (no M5 loop), so its navigator.platform
