@@ -55,7 +55,8 @@ type QuickLaunchOptions struct {
 // CreateSessionOptions configures CreateSession. Temporary and RandomFingerprint
 // are *bool so nil means the TS default of true.
 type CreateSessionOptions struct {
-	Temporary         *bool // default true; false => error (persistent not implemented)
+	Temporary         *bool // default true; false => persistent (create-or-reuse by Name)
+	Name              string // Name identifies a persistent profile (Temporary=false only). Empty => auto-generate and always create new; non-empty => reuse an existing profile with that Name/ID, or create one.
 	RandomFingerprint *bool // default true
 	Proxy             *ProxyConfig
 	Timezone          string
@@ -337,19 +338,12 @@ func pluginsToFingerprint(in PluginsConfig) fingerprint.PluginsConfig {
 	return out
 }
 
-// CreateSession is a lightweight temporary session with a random fingerprint.
-//
-// [DIVERGENCE] Unlike the TS createSession (which builds its own puppeteer.launch
-// path), this UNIFIES with the core launcher: it generates a full fingerprint via
-// fingerprint.GenerateFingerprint, maps it onto a FingerprintConfig, and launches
-// through LaunchChromeStandalone (temp user-data-dir) so proxy auth flows through
-// the same authenticated forward proxy as every other launch. Temporary defaults
-// true; Temporary=false returns an error (persistent sessions are deferred).
-func CreateSession(opts CreateSessionOptions) (*Session, error) {
-	temporary := opts.Temporary == nil || *opts.Temporary
-	if !temporary {
-		return nil, fmt.Errorf("persistent createSession not implemented")
-	}
+// buildSessionFingerprint applies the random-or-default + explicit-override
+// precedence shared by CreateSession's temporary and persistent create-new
+// branches: start from a random fingerprint (or a fixed default when
+// opts.RandomFingerprint is false), then let any explicit opts.Fingerprint
+// fields win over the generated/default values.
+func buildSessionFingerprint(opts CreateSessionOptions) *FingerprintConfig {
 	random := opts.RandomFingerprint == nil || *opts.RandomFingerprint
 
 	fpc := &FingerprintConfig{Language: "en-US", Platform: "Win32", HardwareConcurrency: 8, DeviceMemory: 8}
@@ -461,7 +455,50 @@ func CreateSession(opts CreateSessionOptions) (*Session, error) {
 			fpc.Fonts = o.Fonts
 		}
 	}
+	return fpc
+}
 
+// CreateSession creates either a temporary, in-memory-only session (default)
+// or a real, name-addressable, on-disk persistent session.
+//
+// [DIVERGENCE] Unlike the TS createSession (which builds its own puppeteer.launch
+// path), this UNIFIES with the core launcher: it generates a full fingerprint via
+// fingerprint.GenerateFingerprint, maps it onto a FingerprintConfig, and launches
+// through LaunchChromeStandalone (temp user-data-dir) so proxy auth flows through
+// the same authenticated forward proxy as every other launch. Temporary defaults
+// true. Temporary=false creates or reuses a real on-disk profile via
+// BrowserProfiles.Create/WithProfile: opts.Name identifies the profile (empty
+// always creates fresh with an auto-generated ID); an existing profile with
+// that Name/ID is reused as-is (WithProfile/bp.Launch load its stored
+// Fingerprint/Proxy/Timezone from disk, so opts.Fingerprint/RandomFingerprint/
+// Proxy/Timezone are ignored on reuse).
+func CreateSession(opts CreateSessionOptions) (*Session, error) {
+	temporary := opts.Temporary == nil || *opts.Temporary
+	if !temporary {
+		bp := NewBrowserProfiles(BrowserProfilesOptions{})
+		if opts.Name != "" {
+			profile, err := bp.GetByIdOrName(opts.Name)
+			if err != nil {
+				return nil, err
+			}
+			if profile != nil {
+				return WithProfile(bp, profile.ID, LaunchOptions{Headless: opts.Headless, ChromePath: opts.ChromePath, Args: opts.Args})
+			}
+		}
+
+		fpc := buildSessionFingerprint(opts)
+		id := opts.Name
+		if id == "" {
+			id = fmt.Sprintf("session-%d-%s", time.Now().UnixMilli(), randHex(3))
+		}
+		profile, err := bp.Create(ProfileConfig{ID: id, Name: id, Proxy: opts.Proxy, Timezone: opts.Timezone, Fingerprint: fpc})
+		if err != nil {
+			return nil, err
+		}
+		return WithProfile(bp, profile.ID, LaunchOptions{Headless: opts.Headless, ChromePath: opts.ChromePath, Args: opts.Args})
+	}
+
+	fpc := buildSessionFingerprint(opts)
 
 	sessionID := fmt.Sprintf("session-%d-%s", time.Now().UnixMilli(), randHex(3))
 

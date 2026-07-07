@@ -77,21 +77,6 @@ func TestTryConnectExisting(t *testing.T) {
 	})
 }
 
-// TestCreateSessionPersistentNotImplemented pins the deferred-feature contract:
-// Temporary=false errors out BEFORE any launch (so it stays Chrome-free).
-func TestCreateSessionPersistentNotImplemented(t *testing.T) {
-	sess, err := CreateSession(CreateSessionOptions{Temporary: new(false)})
-	if err == nil {
-		t.Fatal("want error for Temporary=false, got nil")
-	}
-	if sess != nil {
-		t.Fatalf("want nil session, got %+v", sess)
-	}
-	if !strings.Contains(err.Error(), "not implemented") {
-		t.Fatalf("error = %q, want it to contain 'not implemented'", err.Error())
-	}
-}
-
 // TestPatchPageScriptSubset pins the documented PatchPage SUBSET: navigator
 // override (always) + WebRTC + automation bypass, and NEVER canvas/webgl/audio.
 func TestPatchPageScriptSubset(t *testing.T) {

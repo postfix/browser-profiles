@@ -426,6 +426,162 @@ func TestCreateSessionTemporary(t *testing.T) {
 	}
 }
 
+// TestCreateSessionPersistentCreatesOnDiskProfile (PERSIST-01) proves
+// CreateSession(Temporary=false) creates a real, on-disk profile (not the
+// temporary path's in-memory-only StoredProfile): after the call, a fresh
+// BrowserProfiles pointed at the (HOME-redirected) default store can Get it.
+func TestCreateSessionPersistentCreatesOnDiskProfile(t *testing.T) {
+	requireChrome(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	sess, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "persist-01", Headless: true})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Terminate() })
+
+	if sess.Page == nil || sess.Browser == nil {
+		t.Fatal("session missing Page/Browser")
+	}
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{})
+	got, err := bp.Get("persist-01")
+	if err != nil {
+		t.Fatalf("bp.Get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("persist-01 profile was not persisted to disk")
+	}
+}
+
+// TestCreateSessionPersistentReuseCrossProcess (PERSIST-02, PERSIST-05) proves
+// a second CreateSession call with the same Name adopts the still-running
+// Chrome via the on-disk .browser-lock.json rather than spawning a new one.
+// untrackBrowser mirrors TestLaunchCrossProcessReuse's fresh-process
+// simulation: only in-memory tracking is dropped, so the second call must go
+// through the cross-process reuse path.
+func TestCreateSessionPersistentReuseCrossProcess(t *testing.T) {
+	requireChrome(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	sess1, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "persist-02", Headless: true})
+	if err != nil {
+		t.Fatalf("first CreateSession: %v", err)
+	}
+	t.Cleanup(func() { _ = sess1.Terminate() })
+
+	pid1, port1 := sess1.Launch.PID, sess1.Launch.Port
+	if pid1 <= 0 || port1 <= 0 {
+		t.Fatalf("bad first launch result: pid=%d port=%d", pid1, port1)
+	}
+
+	untrackBrowser(sess1.ID)
+	if runningHas(GetRunningBrowsers(), sess1.ID) {
+		t.Fatalf("profile %q still tracked after untrackBrowser", sess1.ID)
+	}
+
+	sess2, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "persist-02", Headless: true})
+	if err != nil {
+		t.Fatalf("second CreateSession (reuse): %v", err)
+	}
+	t.Cleanup(func() { _ = sess2.Terminate() })
+
+	if sess2.Launch.PID != pid1 {
+		t.Fatalf("reuse spawned a NEW Chrome: pid %d != first pid %d", sess2.Launch.PID, pid1)
+	}
+	if sess2.Launch.Port != port1 {
+		t.Fatalf("reuse bound a different port: %d != first port %d", sess2.Launch.Port, port1)
+	}
+}
+
+// TestCreateSessionPersistentTerminateDoesNotDelete (PERSIST-04) proves
+// Terminate on a persistent session closes the browser but never deletes the
+// on-disk profile (unlike QuickLaunch's auto-named delete-on-Terminate).
+func TestCreateSessionPersistentTerminateDoesNotDelete(t *testing.T) {
+	requireChrome(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	sess, err := CreateSession(CreateSessionOptions{Temporary: new(false), Name: "persist-03", Headless: true})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if err := sess.Terminate(); err != nil {
+		t.Fatalf("terminate: %v", err)
+	}
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{})
+	got, err := bp.Get(sess.ID)
+	if err != nil {
+		t.Fatalf("bp.Get: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("profile %q was deleted on Terminate (persistent sessions must not auto-delete)", sess.ID)
+	}
+}
+
+// TestCreateSessionPersistentReuseIgnoresOverrides (PERSIST-03) proves that
+// reusing an existing persistent profile by Name does not mutate its stored
+// fingerprint even when the reuse call passes different Fingerprint overrides:
+// WithProfile/bp.Launch load Fingerprint/Proxy/Timezone from the stored
+// ProfileConfig on disk, not from the CreateSession call's opts.
+func TestCreateSessionPersistentReuseIgnoresOverrides(t *testing.T) {
+	requireChrome(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Cleanup(func() { CloseAllBrowsers() })
+
+	sess1, err := CreateSession(CreateSessionOptions{
+		Temporary:   new(false),
+		Name:        "persist-04",
+		Headless:    true,
+		Fingerprint: &FingerprintConfig{Platform: "Win32", Language: "en-US", HardwareConcurrency: 8, DeviceMemory: 8},
+	})
+	if err != nil {
+		t.Fatalf("first CreateSession: %v", err)
+	}
+	if err := sess1.Terminate(); err != nil {
+		t.Fatalf("terminate first session: %v", err)
+	}
+
+	bp := NewBrowserProfiles(BrowserProfilesOptions{})
+	before, err := bp.Get("persist-04")
+	if err != nil {
+		t.Fatalf("bp.Get before reuse: %v", err)
+	}
+	if before == nil || before.Fingerprint == nil {
+		t.Fatal("persist-04 profile/fingerprint missing before reuse")
+	}
+	originalPlatform := before.Fingerprint.Platform
+
+	sess2, err := CreateSession(CreateSessionOptions{
+		Temporary:   new(false),
+		Name:        "persist-04",
+		Headless:    true,
+		Fingerprint: &FingerprintConfig{Platform: "Linux-sentinel", Language: "en-US", HardwareConcurrency: 8, DeviceMemory: 8},
+	})
+	if err != nil {
+		t.Fatalf("second CreateSession (reuse): %v", err)
+	}
+	t.Cleanup(func() { _ = sess2.Terminate() })
+
+	after, err := bp.Get("persist-04")
+	if err != nil {
+		t.Fatalf("bp.Get after reuse: %v", err)
+	}
+	if after == nil || after.Fingerprint == nil {
+		t.Fatal("persist-04 profile/fingerprint missing after reuse")
+	}
+	if after.Fingerprint.Platform != originalPlatform {
+		t.Fatalf("reuse mutated stored fingerprint: platform = %q, want unchanged %q", after.Fingerprint.Platform, originalPlatform)
+	}
+	if after.Fingerprint.Platform == "Linux-sentinel" {
+		t.Fatal("reuse applied the override fingerprint (PERSIST-03 violated)")
+	}
+}
+
 // TestPatchPageInjectionOnExternalPage (INT-03) proves PatchPage really injects
 // its protection subset into an EXTERNAL page. A page opened directly on a
 // standalone browser is not auto-patched (no M5 loop), so its navigator.platform
